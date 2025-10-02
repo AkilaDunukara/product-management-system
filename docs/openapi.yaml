@@ -1,26 +1,41 @@
 openapi: 3.0.3
 info:
   title: Product Management API
-  version: 1.0.0
+  version: 2.0.0
   description: |
     RESTful API for managing e-commerce products with event-driven architecture.
     
+    **Architecture Overview:**
+    - Single Node.js API server (Port 3001)
+    - PostgreSQL for products database
+    - Redis for rate limiting and SSE pub/sub
+    - Apache Kafka for event streaming (4 partitions)
+    - DynamoDB for analytics hot storage (last 30 days)
+    - S3 for analytics cold storage (historical data)
+    
     **Features:**
     - CRUD operations for products
-    - Bulk import/export via CSV
+    - Bulk CSV import via Node.js Streams (memory-efficient)
     - Real-time notifications via Server-Sent Events (SSE)
     - Event-driven workflows (ProductCreated, ProductUpdated, ProductDeleted, LowStockWarning)
+    - Worker Threads for CPU-intensive analytics aggregations
     
     **Authentication:**
-    All endpoints require Bearer JWT authentication. Sellers can only access their own products.
+    All endpoints require X-Seller-Id header. Sellers can only access their own products.
+    This is a simplified authentication approach for demo purposes.
     
     **Rate Limiting:**
     - Standard endpoints: 100 requests per second per seller
     - Bulk operations: 5 requests per minute per seller
-    - Global limit: 10,000 requests per second
+    - Global target: 10,000+ requests per second
+    - Implemented via Redis sorted sets (sliding window)
     
-    **Idempotency:**
-    Write operations (POST, PUT, DELETE) support the `Idempotency-Key` header to prevent duplicate operations.
+    **Event Flow:**
+    1. API writes product changes to PostgreSQL
+    2. Events emitted to Kafka (product.created, product.updated, product.deleted, product.lowstock)
+    3. Notifications Service consumes events → writes to DynamoDB → publishes to Redis Pub/Sub
+    4. Analytics Service consumes events → Worker Threads process → writes to DynamoDB (hot) → archives to S3 (cold)
+    5. SSE endpoint subscribes to Redis → pushes real-time notifications to connected clients
     
   contact:
     name: API Support
@@ -32,8 +47,6 @@ info:
 servers:
   - url: http://localhost:3001/api
     description: Local development server
-  - url: https://api.example.com/v1
-    description: Production server
 
 tags:
   - name: Products
@@ -42,7 +55,7 @@ tags:
     description: Real-time event notifications
 
 security:
-  - BearerAuth: []
+  - SellerIdHeader: []
 
 paths:
   /products:
@@ -50,10 +63,19 @@ paths:
       tags:
         - Products
       summary: Create a new product
-      description: Creates a new product for the authenticated seller. Emits a ProductCreated event and optionally a LowStockWarning if quantity < 10.
+      description: |
+        Creates a new product for the seller identified in X-Seller-Id header. 
+        
+        **Events Emitted:**
+        - ProductCreated (always)
+        - LowStockWarning (if quantity < 10)
+        
+        **Processing:**
+        - Writes to PostgreSQL products table
+        - Publishes event to Kafka topic: product.created
+        - Analytics Service processes via Worker Threads
+        - Notifications Service writes to DynamoDB and pushes SSE
       operationId: createProduct
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -93,7 +115,7 @@ paths:
                 $ref: '#/components/schemas/ProductResponse'
               example:
                 id: 12345
-                seller_id: "seller-abc-123"
+                seller_id: "seller-123"
                 name: "Wireless Mouse"
                 description: "Ergonomic wireless mouse with USB receiver"
                 price: 29.99
@@ -114,7 +136,13 @@ paths:
       tags:
         - Products
       summary: List seller's products
-      description: Retrieves a paginated list of products belonging to the authenticated seller.
+      description: |
+        Retrieves a paginated list of products for the seller identified in X-Seller-Id header.
+        
+        **Query Filters:**
+        - Category filtering
+        - Quantity range (useful for low-stock queries)
+        - Sorting by multiple fields
       operationId: listProducts
       parameters:
         - name: page
@@ -187,7 +215,7 @@ paths:
               example:
                 data:
                   - id: 12345
-                    seller_id: "seller-abc-123"
+                    seller_id: "seller-123"
                     name: "Wireless Mouse"
                     description: "Ergonomic wireless mouse"
                     price: 29.99
@@ -196,7 +224,7 @@ paths:
                     created_at: "2025-10-02T10:30:00Z"
                     updated_at: "2025-10-02T10:30:00Z"
                   - id: 12346
-                    seller_id: "seller-abc-123"
+                    seller_id: "seller-123"
                     name: "USB Cable"
                     description: "USB-C to USB-A cable"
                     price: 9.99
@@ -221,7 +249,7 @@ paths:
       tags:
         - Products
       summary: Get product by ID
-      description: Retrieves a single product by ID. Seller can only access their own products.
+      description: Retrieves a single product by ID. Seller can only access their own products (filtered by X-Seller-Id).
       operationId: getProduct
       parameters:
         - name: id
@@ -247,7 +275,7 @@ paths:
                 $ref: '#/components/schemas/ProductResponse'
               example:
                 id: 12345
-                seller_id: "seller-abc-123"
+                seller_id: "seller-123"
                 name: "Wireless Mouse"
                 description: "Ergonomic wireless mouse with USB receiver"
                 price: 29.99
@@ -269,9 +297,17 @@ paths:
         - Products
       summary: Update product
       description: |
-        Updates an existing product. Emits a ProductUpdated event. 
-        If quantity is changed to < 10, emits a LowStockWarning event.
-        Seller can only update their own products.
+        Updates an existing product. Seller can only update their own products.
+        
+        **Events Emitted:**
+        - ProductUpdated (always)
+        - LowStockWarning (if quantity changes to < 10)
+        
+        **Processing:**
+        - Updates PostgreSQL products table
+        - Publishes event to Kafka topic: product.updated
+        - Analytics Service recalculates metrics via Worker Threads
+        - Notifications Service pushes SSE if low stock triggered
       operationId: updateProduct
       parameters:
         - name: id
@@ -281,7 +317,6 @@ paths:
           schema:
             type: integer
           example: 12345
-        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -322,7 +357,7 @@ paths:
                 $ref: '#/components/schemas/ProductResponse'
               example:
                 id: 12345
-                seller_id: "seller-abc-123"
+                seller_id: "seller-123"
                 name: "Wireless Mouse Pro"
                 description: "Enhanced ergonomic wireless mouse"
                 price: 39.99
@@ -345,7 +380,16 @@ paths:
       tags:
         - Products
       summary: Delete product
-      description: Deletes a product. Emits a ProductDeleted event. Seller can only delete their own products.
+      description: |
+        Deletes a product. Seller can only delete their own products.
+        
+        **Events Emitted:**
+        - ProductDeleted
+        
+        **Processing:**
+        - Soft-deletes from PostgreSQL (sets deleted_at timestamp)
+        - Publishes event to Kafka topic: product.deleted
+        - Analytics Service updates aggregations via Worker Threads
       operationId: deleteProduct
       parameters:
         - name: id
@@ -355,7 +399,6 @@ paths:
           schema:
             type: integer
           example: 12345
-        - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '200':
           description: Product deleted successfully
@@ -393,16 +436,36 @@ paths:
         - Products
       summary: Bulk import products from CSV
       description: |
-        Imports multiple products from a CSV file. Processes asynchronously using Node.js Streams.
-        CSV format: name,description,price,quantity,category
+        Imports multiple products from a CSV file using Node.js Streams for memory efficiency.
         
-        **Rate Limit:** 5 requests per minute per seller
+        **Stream Pipeline:**
+        1. Multer receives file as readable stream (no memory buffering)
+        2. csv-parser Transform Stream parses rows incrementally
+        3. Validation Transform validates each row
+        4. Batch Transform accumulates 1000 rows
+        5. Database Writer executes batch INSERT
         
-        Maximum file size: 10MB
-        Maximum rows: 10,000
+        **CSV Format:**
+        ```
+        name,description,price,quantity,category
+        iPhone 15,Latest smartphone,999.99,100,Electronics
+        MacBook Pro,16-inch laptop,2499.99,50,Electronics
+        ```
+        
+        **Events Emitted:**
+        - ProductCreated (batched, one event per 1000 rows)
+        - LowStockWarning (for products with quantity < 10)
+        
+        **Constraints:**
+        - Maximum file size: 10MB
+        - Maximum rows: 10,000
+        - Rate limit: 5 requests per minute per seller
+        
+        **Performance:**
+        - Memory usage: ~64KB buffer (constant, regardless of file size)
+        - Processing speed: ~1,500 rows/second
+        - Backpressure handling prevents memory overflow
       operationId: importProducts
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -416,11 +479,9 @@ paths:
                   type: string
                   format: binary
                   description: CSV file with product data
-            example:
-              file: products.csv
       responses:
         '202':
-          description: Import accepted and processing
+          description: Import accepted and processing (async)
           headers:
             X-RateLimit-Limit:
               schema:
@@ -466,53 +527,6 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
-  /products/export:
-    get:
-      tags:
-        - Products
-      summary: Export products to CSV
-      description: |
-        Exports all seller's products to a CSV file. Streams data for memory efficiency.
-        CSV format: id,name,description,price,quantity,category,created_at,updated_at
-      operationId: exportProducts
-      parameters:
-        - name: category
-          in: query
-          description: Filter by category
-          schema:
-            type: string
-          example: "Electronics"
-      responses:
-        '200':
-          description: CSV file generated successfully
-          headers:
-            Content-Disposition:
-              schema:
-                type: string
-              description: Attachment filename
-              example: "attachment; filename=products-2025-10-02.csv"
-            X-RateLimit-Limit:
-              $ref: '#/components/headers/X-RateLimit-Limit'
-            X-RateLimit-Remaining:
-              $ref: '#/components/headers/X-RateLimit-Remaining'
-            X-RateLimit-Reset:
-              $ref: '#/components/headers/X-RateLimit-Reset'
-          content:
-            text/csv:
-              schema:
-                type: string
-                format: binary
-              example: |
-                id,name,description,price,quantity,category,created_at,updated_at
-                12345,"Wireless Mouse","Ergonomic wireless mouse",29.99,150,"Electronics","2025-10-02T10:30:00Z","2025-10-02T10:30:00Z"
-                12346,"USB Cable","USB-C to USB-A cable",9.99,5,"Electronics","2025-10-01T15:20:00Z","2025-10-01T15:20:00Z"
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
   /events/stream:
     get:
       tags:
@@ -521,18 +535,27 @@ paths:
       description: |
         Server-Sent Events (SSE) endpoint for real-time product notifications.
         
+        **Architecture Flow:**
+        1. Client opens SSE connection to this endpoint
+        2. API subscribes to Redis Pub/Sub channel for seller
+        3. Notifications Service publishes events to Redis
+        4. API receives via Redis → pushes to SSE client
+        
         **Events Received:**
         - ProductCreated
         - ProductUpdated
         - ProductDeleted
-        - LowStockWarning
+        - LowStockWarning (quantity < 10)
         
-        Connection remains open. Heartbeat sent every 30 seconds to keep connection alive.
+        **Connection Management:**
+        - Heartbeat sent every 30 seconds to keep connection alive
+        - Automatic reconnection on disconnect
+        - One connection per seller (multiplexed via Redis)
         
         **Event Format:**
         ```
-        event: ProductCreated
-        data: {"id": "notif-123", "type": "ProductCreated", "message": "New product: Wireless Mouse", "data": {...}, "timestamp": 1696176000000}
+        event: LowStockWarning
+        data: {"id": "notif-123", "type": "LowStockWarning", "message": "Low stock: Widget A (5 left)", "data": {...}, "timestamp": 1696176000000}
         
         ```
       operationId: subscribeToEvents
@@ -565,16 +588,18 @@ paths:
                 connection_established:
                   summary: Initial connection
                   value: |
-                    data: {"type":"connected","workerId":12345}
+                    data: {"type":"connected","sellerId":"seller-123"}
                     
                 low_stock_warning:
                   summary: Low stock alert
                   value: |
+                    event: LowStockWarning
                     data: {"id":"notif-abc-123","type":"LowStockWarning","message":"Low stock: Widget A (5 left)","data":{"productId":12345,"name":"Widget A","quantity":5},"timestamp":1696176000000}
                     
                 product_created:
                   summary: Product created notification
                   value: |
+                    event: ProductCreated
                     data: {"id":"notif-def-456","type":"ProductCreated","message":"New product: Gadget B","data":{"productId":12346,"name":"Gadget B"},"timestamp":1696176030000}
                     
                 heartbeat:
@@ -589,29 +614,17 @@ paths:
 
 components:
   securitySchemes:
-    BearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-      description: |
-        JWT token obtained from authentication service.
-        Token should contain seller_id in the payload.
-        
-        Example: `Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
-
-  parameters:
-    IdempotencyKey:
-      name: Idempotency-Key
+    SellerIdHeader:
+      type: apiKey
       in: header
+      name: X-Seller-Id
       description: |
-        Unique key to ensure idempotent operations. If the same key is used within 24 hours,
-        the cached response will be returned without executing the operation again.
+        Seller identifier passed in request header for authentication.
+        This is a simplified approach for demo purposes.
         
-        Format: UUID or any unique string (max 255 characters)
-      schema:
-        type: string
-        maxLength: 255
-      example: "550e8400-e29b-41d4-a716-446655440000"
+        In production, this would be extracted from a JWT token.
+        
+        Example: `X-Seller-Id: seller-123`
 
   headers:
     X-RateLimit-Limit:
@@ -705,8 +718,8 @@ components:
           example: 12345
         seller_id:
           type: string
-          description: Seller identifier (from JWT)
-          example: "seller-abc-123"
+          description: Seller identifier (from X-Seller-Id header)
+          example: "seller-123"
         name:
           type: string
           example: "Wireless Mouse"
@@ -816,24 +829,24 @@ components:
                   field: "name"
 
     Unauthorized:
-      description: Unauthorized - missing or invalid authentication token
+      description: Unauthorized - missing or invalid X-Seller-Id header
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
           examples:
-            missing_token:
-              summary: Missing token
+            missing_header:
+              summary: Missing X-Seller-Id header
               value:
                 error: "Unauthorized"
-                message: "Authentication token required"
-                error_code: "MISSING_TOKEN"
-            invalid_token:
-              summary: Invalid token
+                message: "X-Seller-Id header required"
+                error_code: "MISSING_SELLER_ID"
+            invalid_seller:
+              summary: Invalid seller ID
               value:
                 error: "Unauthorized"
-                message: "Invalid or expired authentication token"
-                error_code: "INVALID_TOKEN"
+                message: "Invalid seller identifier"
+                error_code: "INVALID_SELLER_ID"
 
     NotFound:
       description: Resource not found
@@ -843,7 +856,7 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
           example:
             error: "Not Found"
-            message: "Product with ID 12345 not found"
+            message: "Product with ID 12345 not found or does not belong to seller"
             error_code: "PRODUCT_NOT_FOUND"
 
     TooManyRequests:
