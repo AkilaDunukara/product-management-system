@@ -1,0 +1,887 @@
+openapi: 3.0.3
+info:
+  title: Product Management API
+  version: 1.0.0
+  description: |
+    RESTful API for managing e-commerce products with event-driven architecture.
+    
+    **Features:**
+    - CRUD operations for products
+    - Bulk import/export via CSV
+    - Real-time notifications via Server-Sent Events (SSE)
+    - Event-driven workflows (ProductCreated, ProductUpdated, ProductDeleted, LowStockWarning)
+    
+    **Authentication:**
+    All endpoints require Bearer JWT authentication. Sellers can only access their own products.
+    
+    **Rate Limiting:**
+    - Standard endpoints: 100 requests per second per seller
+    - Bulk operations: 5 requests per minute per seller
+    - Global limit: 10,000 requests per second
+    
+    **Idempotency:**
+    Write operations (POST, PUT, DELETE) support the `Idempotency-Key` header to prevent duplicate operations.
+    
+  contact:
+    name: API Support
+    email: api-support@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3001/api
+    description: Local development server
+  - url: https://api.example.com/v1
+    description: Production server
+
+tags:
+  - name: Products
+    description: Product management operations
+  - name: Events
+    description: Real-time event notifications
+
+security:
+  - BearerAuth: []
+
+paths:
+  /products:
+    post:
+      tags:
+        - Products
+      summary: Create a new product
+      description: Creates a new product for the authenticated seller. Emits a ProductCreated event and optionally a LowStockWarning if quantity < 10.
+      operationId: createProduct
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductCreateRequest'
+            examples:
+              electronics:
+                summary: Electronics product
+                value:
+                  name: "Wireless Mouse"
+                  description: "Ergonomic wireless mouse with USB receiver"
+                  price: 29.99
+                  quantity: 150
+                  category: "Electronics"
+              low_stock:
+                summary: Low stock product
+                value:
+                  name: "Limited Edition Widget"
+                  description: "Rare collectible widget"
+                  price: 99.99
+                  quantity: 5
+                  category: "Collectibles"
+      responses:
+        '201':
+          description: Product created successfully
+          headers:
+            X-RateLimit-Limit:
+              $ref: '#/components/headers/X-RateLimit-Limit'
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/X-RateLimit-Remaining'
+            X-RateLimit-Reset:
+              $ref: '#/components/headers/X-RateLimit-Reset'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+              example:
+                id: 12345
+                seller_id: "seller-abc-123"
+                name: "Wireless Mouse"
+                description: "Ergonomic wireless mouse with USB receiver"
+                price: 29.99
+                quantity: 150
+                category: "Electronics"
+                created_at: "2025-10-02T10:30:00Z"
+                updated_at: "2025-10-02T10:30:00Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    get:
+      tags:
+        - Products
+      summary: List seller's products
+      description: Retrieves a paginated list of products belonging to the authenticated seller.
+      operationId: listProducts
+      parameters:
+        - name: page
+          in: query
+          description: Page number (1-indexed)
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          example: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          example: 20
+        - name: category
+          in: query
+          description: Filter by category
+          schema:
+            type: string
+          example: "Electronics"
+        - name: min_quantity
+          in: query
+          description: Filter by minimum quantity (useful for low stock queries)
+          schema:
+            type: integer
+            minimum: 0
+          example: 0
+        - name: max_quantity
+          in: query
+          description: Filter by maximum quantity (useful for low stock queries)
+          schema:
+            type: integer
+            minimum: 0
+          example: 10
+        - name: sort_by
+          in: query
+          description: Sort field
+          schema:
+            type: string
+            enum: [name, price, quantity, created_at, updated_at]
+            default: created_at
+          example: "created_at"
+        - name: sort_order
+          in: query
+          description: Sort order
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+          example: "desc"
+      responses:
+        '200':
+          description: Products retrieved successfully
+          headers:
+            X-RateLimit-Limit:
+              $ref: '#/components/headers/X-RateLimit-Limit'
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/X-RateLimit-Remaining'
+            X-RateLimit-Reset:
+              $ref: '#/components/headers/X-RateLimit-Reset'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductListResponse'
+              example:
+                data:
+                  - id: 12345
+                    seller_id: "seller-abc-123"
+                    name: "Wireless Mouse"
+                    description: "Ergonomic wireless mouse"
+                    price: 29.99
+                    quantity: 150
+                    category: "Electronics"
+                    created_at: "2025-10-02T10:30:00Z"
+                    updated_at: "2025-10-02T10:30:00Z"
+                  - id: 12346
+                    seller_id: "seller-abc-123"
+                    name: "USB Cable"
+                    description: "USB-C to USB-A cable"
+                    price: 9.99
+                    quantity: 5
+                    category: "Electronics"
+                    created_at: "2025-10-01T15:20:00Z"
+                    updated_at: "2025-10-01T15:20:00Z"
+                pagination:
+                  page: 1
+                  limit: 20
+                  total: 156
+                  total_pages: 8
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /products/{id}:
+    get:
+      tags:
+        - Products
+      summary: Get product by ID
+      description: Retrieves a single product by ID. Seller can only access their own products.
+      operationId: getProduct
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Product ID
+          schema:
+            type: integer
+          example: 12345
+      responses:
+        '200':
+          description: Product retrieved successfully
+          headers:
+            X-RateLimit-Limit:
+              $ref: '#/components/headers/X-RateLimit-Limit'
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/X-RateLimit-Remaining'
+            X-RateLimit-Reset:
+              $ref: '#/components/headers/X-RateLimit-Reset'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+              example:
+                id: 12345
+                seller_id: "seller-abc-123"
+                name: "Wireless Mouse"
+                description: "Ergonomic wireless mouse with USB receiver"
+                price: 29.99
+                quantity: 150
+                category: "Electronics"
+                created_at: "2025-10-02T10:30:00Z"
+                updated_at: "2025-10-02T10:30:00Z"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      tags:
+        - Products
+      summary: Update product
+      description: |
+        Updates an existing product. Emits a ProductUpdated event. 
+        If quantity is changed to < 10, emits a LowStockWarning event.
+        Seller can only update their own products.
+      operationId: updateProduct
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Product ID
+          schema:
+            type: integer
+          example: 12345
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductUpdateRequest'
+            examples:
+              partial_update:
+                summary: Update price and quantity
+                value:
+                  price: 24.99
+                  quantity: 120
+              low_stock_update:
+                summary: Update causing low stock warning
+                value:
+                  quantity: 8
+              full_update:
+                summary: Update all fields
+                value:
+                  name: "Wireless Mouse Pro"
+                  description: "Enhanced ergonomic wireless mouse"
+                  price: 39.99
+                  quantity: 200
+                  category: "Electronics"
+      responses:
+        '200':
+          description: Product updated successfully
+          headers:
+            X-RateLimit-Limit:
+              $ref: '#/components/headers/X-RateLimit-Limit'
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/X-RateLimit-Remaining'
+            X-RateLimit-Reset:
+              $ref: '#/components/headers/X-RateLimit-Reset'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+              example:
+                id: 12345
+                seller_id: "seller-abc-123"
+                name: "Wireless Mouse Pro"
+                description: "Enhanced ergonomic wireless mouse"
+                price: 39.99
+                quantity: 200
+                category: "Electronics"
+                created_at: "2025-10-02T10:30:00Z"
+                updated_at: "2025-10-02T11:45:00Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      tags:
+        - Products
+      summary: Delete product
+      description: Deletes a product. Emits a ProductDeleted event. Seller can only delete their own products.
+      operationId: deleteProduct
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Product ID
+          schema:
+            type: integer
+          example: 12345
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Product deleted successfully
+          headers:
+            X-RateLimit-Limit:
+              $ref: '#/components/headers/X-RateLimit-Limit'
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/X-RateLimit-Remaining'
+            X-RateLimit-Reset:
+              $ref: '#/components/headers/X-RateLimit-Reset'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  deleted_id:
+                    type: integer
+              example:
+                message: "Product deleted successfully"
+                deleted_id: 12345
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /products/import:
+    post:
+      tags:
+        - Products
+      summary: Bulk import products from CSV
+      description: |
+        Imports multiple products from a CSV file. Processes asynchronously using Node.js Streams.
+        CSV format: name,description,price,quantity,category
+        
+        **Rate Limit:** 5 requests per minute per seller
+        
+        Maximum file size: 10MB
+        Maximum rows: 10,000
+      operationId: importProducts
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CSV file with product data
+            example:
+              file: products.csv
+      responses:
+        '202':
+          description: Import accepted and processing
+          headers:
+            X-RateLimit-Limit:
+              schema:
+                type: integer
+              description: Rate limit for bulk operations (5 per minute)
+              example: 5
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/X-RateLimit-Remaining'
+            X-RateLimit-Reset:
+              $ref: '#/components/headers/X-RateLimit-Reset'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  import_id:
+                    type: string
+                  status:
+                    type: string
+                    enum: [processing]
+              example:
+                message: "Import processing started"
+                import_id: "import-abc123-20251002"
+                status: "processing"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          description: File too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Payload Too Large"
+                message: "CSV file exceeds maximum size of 10MB"
+                error_code: "FILE_TOO_LARGE"
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /products/export:
+    get:
+      tags:
+        - Products
+      summary: Export products to CSV
+      description: |
+        Exports all seller's products to a CSV file. Streams data for memory efficiency.
+        CSV format: id,name,description,price,quantity,category,created_at,updated_at
+      operationId: exportProducts
+      parameters:
+        - name: category
+          in: query
+          description: Filter by category
+          schema:
+            type: string
+          example: "Electronics"
+      responses:
+        '200':
+          description: CSV file generated successfully
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              description: Attachment filename
+              example: "attachment; filename=products-2025-10-02.csv"
+            X-RateLimit-Limit:
+              $ref: '#/components/headers/X-RateLimit-Limit'
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/X-RateLimit-Remaining'
+            X-RateLimit-Reset:
+              $ref: '#/components/headers/X-RateLimit-Reset'
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+              example: |
+                id,name,description,price,quantity,category,created_at,updated_at
+                12345,"Wireless Mouse","Ergonomic wireless mouse",29.99,150,"Electronics","2025-10-02T10:30:00Z","2025-10-02T10:30:00Z"
+                12346,"USB Cable","USB-C to USB-A cable",9.99,5,"Electronics","2025-10-01T15:20:00Z","2025-10-01T15:20:00Z"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /events/stream:
+    get:
+      tags:
+        - Events
+      summary: Subscribe to real-time notifications via SSE
+      description: |
+        Server-Sent Events (SSE) endpoint for real-time product notifications.
+        
+        **Events Received:**
+        - ProductCreated
+        - ProductUpdated
+        - ProductDeleted
+        - LowStockWarning
+        
+        Connection remains open. Heartbeat sent every 30 seconds to keep connection alive.
+        
+        **Event Format:**
+        ```
+        event: ProductCreated
+        data: {"id": "notif-123", "type": "ProductCreated", "message": "New product: Wireless Mouse", "data": {...}, "timestamp": 1696176000000}
+        
+        ```
+      operationId: subscribeToEvents
+      responses:
+        '200':
+          description: SSE stream established
+          headers:
+            Content-Type:
+              schema:
+                type: string
+              example: "text/event-stream"
+            Cache-Control:
+              schema:
+                type: string
+              example: "no-cache"
+            Connection:
+              schema:
+                type: string
+              example: "keep-alive"
+            X-Accel-Buffering:
+              schema:
+                type: string
+              description: Disable proxy buffering
+              example: "no"
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              examples:
+                connection_established:
+                  summary: Initial connection
+                  value: |
+                    data: {"type":"connected","workerId":12345}
+                    
+                low_stock_warning:
+                  summary: Low stock alert
+                  value: |
+                    data: {"id":"notif-abc-123","type":"LowStockWarning","message":"Low stock: Widget A (5 left)","data":{"productId":12345,"name":"Widget A","quantity":5},"timestamp":1696176000000}
+                    
+                product_created:
+                  summary: Product created notification
+                  value: |
+                    data: {"id":"notif-def-456","type":"ProductCreated","message":"New product: Gadget B","data":{"productId":12346,"name":"Gadget B"},"timestamp":1696176030000}
+                    
+                heartbeat:
+                  summary: Heartbeat (every 30s)
+                  value: |
+                    : heartbeat
+                    
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token obtained from authentication service.
+        Token should contain seller_id in the payload.
+        
+        Example: `Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      description: |
+        Unique key to ensure idempotent operations. If the same key is used within 24 hours,
+        the cached response will be returned without executing the operation again.
+        
+        Format: UUID or any unique string (max 255 characters)
+      schema:
+        type: string
+        maxLength: 255
+      example: "550e8400-e29b-41d4-a716-446655440000"
+
+  headers:
+    X-RateLimit-Limit:
+      description: Maximum number of requests per time window
+      schema:
+        type: integer
+      example: 100
+    X-RateLimit-Remaining:
+      description: Number of requests remaining in current window
+      schema:
+        type: integer
+      example: 87
+    X-RateLimit-Reset:
+      description: Unix timestamp when the rate limit resets
+      schema:
+        type: integer
+      example: 1696176060
+
+  schemas:
+    ProductCreateRequest:
+      type: object
+      required:
+        - name
+        - price
+        - quantity
+        - category
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Product name
+          example: "Wireless Mouse"
+        description:
+          type: string
+          maxLength: 2000
+          description: Product description (optional)
+          example: "Ergonomic wireless mouse with USB receiver"
+        price:
+          type: number
+          format: float
+          minimum: 0.01
+          description: Product price (must be greater than 0)
+          example: 29.99
+        quantity:
+          type: integer
+          minimum: 0
+          description: Available quantity (0 or greater)
+          example: 150
+        category:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Product category
+          example: "Electronics"
+
+    ProductUpdateRequest:
+      type: object
+      description: All fields are optional. Only provided fields will be updated.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+          example: "Wireless Mouse Pro"
+        description:
+          type: string
+          maxLength: 2000
+          example: "Enhanced ergonomic wireless mouse"
+        price:
+          type: number
+          format: float
+          minimum: 0.01
+          example: 39.99
+        quantity:
+          type: integer
+          minimum: 0
+          example: 200
+        category:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: "Electronics"
+
+    ProductResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique product identifier (auto-generated)
+          example: 12345
+        seller_id:
+          type: string
+          description: Seller identifier (from JWT)
+          example: "seller-abc-123"
+        name:
+          type: string
+          example: "Wireless Mouse"
+        description:
+          type: string
+          nullable: true
+          example: "Ergonomic wireless mouse with USB receiver"
+        price:
+          type: number
+          format: float
+          example: 29.99
+        quantity:
+          type: integer
+          example: 150
+        category:
+          type: string
+          example: "Electronics"
+        created_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp
+          example: "2025-10-02T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp
+          example: "2025-10-02T10:30:00Z"
+
+    ProductListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductResponse'
+        pagination:
+          type: object
+          properties:
+            page:
+              type: integer
+              description: Current page number
+              example: 1
+            limit:
+              type: integer
+              description: Items per page
+              example: 20
+            total:
+              type: integer
+              description: Total number of items
+              example: 156
+            total_pages:
+              type: integer
+              description: Total number of pages
+              example: 8
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error type
+          example: "Bad Request"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Invalid product data: price must be greater than 0"
+        error_code:
+          type: string
+          description: Machine-readable error code
+          example: "INVALID_PRICE"
+        details:
+          type: object
+          description: Additional error details (validation errors, etc.)
+          example:
+            field: "price"
+            constraint: "minimum"
+            value: -5
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid input data
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            validation_error:
+              summary: Validation error
+              value:
+                error: "Bad Request"
+                message: "Invalid product data: price must be greater than 0"
+                error_code: "VALIDATION_ERROR"
+                details:
+                  field: "price"
+                  constraint: "minimum"
+                  value: -5
+            missing_field:
+              summary: Missing required field
+              value:
+                error: "Bad Request"
+                message: "Missing required field: name"
+                error_code: "MISSING_FIELD"
+                details:
+                  field: "name"
+
+    Unauthorized:
+      description: Unauthorized - missing or invalid authentication token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            missing_token:
+              summary: Missing token
+              value:
+                error: "Unauthorized"
+                message: "Authentication token required"
+                error_code: "MISSING_TOKEN"
+            invalid_token:
+              summary: Invalid token
+              value:
+                error: "Unauthorized"
+                message: "Invalid or expired authentication token"
+                error_code: "INVALID_TOKEN"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Not Found"
+            message: "Product with ID 12345 not found"
+            error_code: "PRODUCT_NOT_FOUND"
+
+    TooManyRequests:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          $ref: '#/components/headers/X-RateLimit-Limit'
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+          example: 0
+        X-RateLimit-Reset:
+          $ref: '#/components/headers/X-RateLimit-Reset'
+        Retry-After:
+          description: Seconds until rate limit resets
+          schema:
+            type: integer
+          example: 60
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Too Many Requests"
+            message: "Rate limit exceeded. Maximum 100 requests per second per seller."
+            error_code: "RATE_LIMIT_EXCEEDED"
+            details:
+              limit: 100
+              window: "1s"
+              retry_after: 60
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Internal Server Error"
+            message: "An unexpected error occurred. Please try again later."
+            error_code: "INTERNAL_ERROR"
