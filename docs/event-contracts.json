@@ -1,0 +1,538 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Product Management System - Event Contracts",
+  "description": "JSON Schema definitions for all events in the product management system with retry policies, ordering guarantees, and consumer subscriptions",
+  "version": "1.0.0",
+  "metadata": {
+    "kafka": {
+      "topics": {
+        "product.created": {
+          "partitions": 4,
+          "replication_factor": 3,
+          "retention_ms": 604800000,
+          "partition_key": "sellerId"
+        },
+        "product.updated": {
+          "partitions": 4,
+          "replication_factor": 3,
+          "retention_ms": 604800000,
+          "partition_key": "sellerId"
+        },
+        "product.deleted": {
+          "partitions": 4,
+          "replication_factor": 3,
+          "retention_ms": 604800000,
+          "partition_key": "sellerId"
+        },
+        "product.lowstock": {
+          "partitions": 4,
+          "replication_factor": 3,
+          "retention_ms": 604800000,
+          "partition_key": "sellerId"
+        }
+      }
+    },
+    "ordering_guarantees": {
+      "strategy": "partition_by_seller",
+      "description": "Events are partitioned by sellerId to guarantee ordering for all events from the same seller. Events from different sellers may be processed in parallel across partitions.",
+      "partition_count": 4,
+      "partition_function": "hash(sellerId) % 4"
+    },
+    "retry_policies": {
+      "notification_service": {
+        "max_retries": 5,
+        "initial_retry_delay_ms": 500,
+        "backoff_multiplier": 2,
+        "max_retry_delay_ms": 10000,
+        "dead_letter_queue": "notifications-dlq"
+      },
+      "analytics_service": {
+        "max_retries": 10,
+        "initial_retry_delay_ms": 2000,
+        "backoff_multiplier": 2,
+        "max_retry_delay_ms": 60000,
+        "dead_letter_queue": "analytics-dlq"
+      }
+    },
+    "consumers": {
+      "notification_service": {
+        "subscribes_to": [
+          "product.created",
+          "product.updated",
+          "product.deleted",
+          "product.lowstock"
+        ],
+        "consumer_group": "notification-service-group",
+        "description": "Consumes all events, writes to DynamoDB, publishes to Redis Pub/Sub for SSE real-time notifications",
+        "retry_policy": "notification_service",
+        "processing_guarantee": "at_least_once"
+      },
+      "analytics_service": {
+        "subscribes_to": [
+          "product.created",
+          "product.updated",
+          "product.deleted"
+        ],
+        "consumer_group": "analytics-service-group",
+        "description": "Consumes product lifecycle events, processes via Worker Threads, writes to DynamoDB (hot storage, 30 days) and archives to S3 (cold storage)",
+        "retry_policy": "analytics_service",
+        "processing_guarantee": "at_least_once"
+      }
+    }
+  },
+  "definitions": {
+    "BaseEvent": {
+      "type": "object",
+      "required": ["eventId", "eventType", "timestamp", "data"],
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9-]+\\-[0-9]+\\-[A-Za-z]+\\-[0-9]+$",
+          "description": "Unique event identifier in format: {sellerId}-{productId}-{eventType}-{timestamp}",
+          "examples": ["seller-123-12345-ProductCreated-1696176000000"]
+        },
+        "eventType": {
+          "type": "string",
+          "enum": ["ProductCreated", "ProductUpdated", "ProductDeleted", "LowStockWarning"],
+          "description": "Type of event"
+        },
+        "timestamp": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Unix timestamp in milliseconds when the event occurred",
+          "examples": [1696176000000]
+        },
+        "data": {
+          "type": "object",
+          "description": "Event-specific payload"
+        }
+      }
+    },
+    "ProductData": {
+      "type": "object",
+      "required": ["productId", "sellerId", "name", "price", "quantity", "category"],
+      "properties": {
+        "productId": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Unique product identifier"
+        },
+        "sellerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Seller identifier"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "description": "Product name"
+        },
+        "description": {
+          "type": ["string", "null"],
+          "maxLength": 2000,
+          "description": "Product description"
+        },
+        "price": {
+          "type": "number",
+          "minimum": 0.01,
+          "description": "Product price"
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Available quantity"
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Product category"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp"
+        }
+      }
+    }
+  },
+  "events": {
+    "ProductCreated": {
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "ProductCreated Event",
+        "description": "Event emitted when a new product is created",
+        "allOf": [
+          { "$ref": "#/definitions/BaseEvent" }
+        ],
+        "properties": {
+          "eventType": {
+            "const": "ProductCreated"
+          },
+          "data": {
+            "$ref": "#/definitions/ProductData"
+          }
+        }
+      },
+      "kafka_topic": "product.created",
+      "consumers": ["notification_service", "analytics_service"],
+      "examples": [
+        {
+          "eventId": "seller-123-12345-ProductCreated-1696176000000",
+          "eventType": "ProductCreated",
+          "timestamp": 1696176000000,
+          "data": {
+            "productId": 12345,
+            "sellerId": "seller-123",
+            "name": "Wireless Mouse",
+            "description": "Ergonomic wireless mouse with USB receiver",
+            "price": 29.99,
+            "quantity": 150,
+            "category": "Electronics",
+            "createdAt": "2025-10-02T10:30:00Z",
+            "updatedAt": "2025-10-02T10:30:00Z"
+          }
+        },
+        {
+          "eventId": "seller-456-67890-ProductCreated-1696176030000",
+          "eventType": "ProductCreated",
+          "timestamp": 1696176030000,
+          "data": {
+            "productId": 67890,
+            "sellerId": "seller-456",
+            "name": "USB-C Cable",
+            "description": "2-meter USB-C charging cable",
+            "price": 12.99,
+            "quantity": 8,
+            "category": "Accessories",
+            "createdAt": "2025-10-02T10:30:30Z",
+            "updatedAt": "2025-10-02T10:30:30Z"
+          }
+        }
+      ]
+    },
+    "ProductUpdated": {
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "ProductUpdated Event",
+        "description": "Event emitted when a product is updated",
+        "allOf": [
+          { "$ref": "#/definitions/BaseEvent" }
+        ],
+        "properties": {
+          "eventType": {
+            "const": "ProductUpdated"
+          },
+          "data": {
+            "allOf": [
+              { "$ref": "#/definitions/ProductData" }
+            ],
+            "properties": {
+              "changes": {
+                "type": "object",
+                "description": "Fields that were changed in the update",
+                "properties": {
+                  "name": {
+                    "type": "object",
+                    "properties": {
+                      "old": { "type": ["string", "null"] },
+                      "new": { "type": "string" }
+                    }
+                  },
+                  "description": {
+                    "type": "object",
+                    "properties": {
+                      "old": { "type": ["string", "null"] },
+                      "new": { "type": ["string", "null"] }
+                    }
+                  },
+                  "price": {
+                    "type": "object",
+                    "properties": {
+                      "old": { "type": "number" },
+                      "new": { "type": "number" }
+                    }
+                  },
+                  "quantity": {
+                    "type": "object",
+                    "properties": {
+                      "old": { "type": "integer" },
+                      "new": { "type": "integer" }
+                    }
+                  },
+                  "category": {
+                    "type": "object",
+                    "properties": {
+                      "old": { "type": ["string", "null"] },
+                      "new": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            },
+            "required": ["productId", "sellerId", "name", "price", "quantity", "category", "changes"]
+          }
+        }
+      },
+      "kafka_topic": "product.updated",
+      "consumers": ["notification_service", "analytics_service"],
+      "examples": [
+        {
+          "eventId": "seller-123-12345-ProductUpdated-1696176060000",
+          "eventType": "ProductUpdated",
+          "timestamp": 1696176060000,
+          "data": {
+            "productId": 12345,
+            "sellerId": "seller-123",
+            "name": "Wireless Mouse Pro",
+            "description": "Enhanced ergonomic wireless mouse with USB receiver",
+            "price": 34.99,
+            "quantity": 120,
+            "category": "Electronics",
+            "createdAt": "2025-10-02T10:30:00Z",
+            "updatedAt": "2025-10-02T10:31:00Z",
+            "changes": {
+              "name": {
+                "old": "Wireless Mouse",
+                "new": "Wireless Mouse Pro"
+              },
+              "price": {
+                "old": 29.99,
+                "new": 34.99
+              },
+              "quantity": {
+                "old": 150,
+                "new": 120
+              }
+            }
+          }
+        },
+        {
+          "eventId": "seller-789-54321-ProductUpdated-1696176090000",
+          "eventType": "ProductUpdated",
+          "timestamp": 1696176090000,
+          "data": {
+            "productId": 54321,
+            "sellerId": "seller-789",
+            "name": "Bluetooth Headphones",
+            "description": "Noise-cancelling wireless headphones",
+            "price": 89.99,
+            "quantity": 5,
+            "category": "Audio",
+            "createdAt": "2025-10-01T08:15:00Z",
+            "updatedAt": "2025-10-02T10:31:30Z",
+            "changes": {
+              "quantity": {
+                "old": 25,
+                "new": 5
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ProductDeleted": {
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "ProductDeleted Event",
+        "description": "Event emitted when a product is deleted (soft delete)",
+        "allOf": [
+          { "$ref": "#/definitions/BaseEvent" }
+        ],
+        "properties": {
+          "eventType": {
+            "const": "ProductDeleted"
+          },
+          "data": {
+            "type": "object",
+            "required": ["productId", "sellerId", "name", "deletedAt"],
+            "properties": {
+              "productId": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Unique product identifier"
+              },
+              "sellerId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100,
+                "description": "Seller identifier"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "description": "Product name at time of deletion"
+              },
+              "category": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100,
+                "description": "Product category at time of deletion"
+              },
+              "deletedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "ISO 8601 timestamp when deleted"
+              }
+            }
+          }
+        }
+      },
+      "kafka_topic": "product.deleted",
+      "consumers": ["notification_service", "analytics_service"],
+      "examples": [
+        {
+          "eventId": "seller-123-12345-ProductDeleted-1696176120000",
+          "eventType": "ProductDeleted",
+          "timestamp": 1696176120000,
+          "data": {
+            "productId": 12345,
+            "sellerId": "seller-123",
+            "name": "Wireless Mouse Pro",
+            "category": "Electronics",
+            "deletedAt": "2025-10-02T10:32:00Z"
+          }
+        },
+        {
+          "eventId": "seller-456-99999-ProductDeleted-1696176150000",
+          "eventType": "ProductDeleted",
+          "timestamp": 1696176150000,
+          "data": {
+            "productId": 99999,
+            "sellerId": "seller-456",
+            "name": "Discontinued Widget",
+            "category": "Legacy",
+            "deletedAt": "2025-10-02T10:32:30Z"
+          }
+        }
+      ]
+    },
+    "LowStockWarning": {
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "LowStockWarning Event",
+        "description": "Event emitted when product quantity falls below threshold (< 10)",
+        "allOf": [
+          { "$ref": "#/definitions/BaseEvent" }
+        ],
+        "properties": {
+          "eventType": {
+            "const": "LowStockWarning"
+          },
+          "data": {
+            "type": "object",
+            "required": ["productId", "sellerId", "name", "quantity", "threshold", "category"],
+            "properties": {
+              "productId": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Unique product identifier"
+              },
+              "sellerId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100,
+                "description": "Seller identifier"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255,
+                "description": "Product name"
+              },
+              "quantity": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9,
+                "description": "Current quantity (below threshold)"
+              },
+              "threshold": {
+                "type": "integer",
+                "const": 10,
+                "description": "Low stock threshold"
+              },
+              "category": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100,
+                "description": "Product category"
+              },
+              "price": {
+                "type": "number",
+                "minimum": 0.01,
+                "description": "Current product price"
+              },
+              "previousQuantity": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Quantity before the change that triggered this warning"
+              }
+            }
+          }
+        }
+      },
+      "kafka_topic": "product.lowstock",
+      "consumers": ["notification_service"],
+      "trigger_conditions": {
+        "on_create": "quantity < 10",
+        "on_update": "new_quantity < 10 AND old_quantity >= 10",
+        "description": "Warning is triggered when a product is created with low stock or when quantity drops below 10 from a higher value"
+      },
+      "examples": [
+        {
+          "eventId": "seller-456-67890-LowStockWarning-1696176030000",
+          "eventType": "LowStockWarning",
+          "timestamp": 1696176030000,
+          "data": {
+            "productId": 67890,
+            "sellerId": "seller-456",
+            "name": "USB-C Cable",
+            "quantity": 8,
+            "threshold": 10,
+            "category": "Accessories",
+            "price": 12.99,
+            "previousQuantity": 8
+          }
+        },
+        {
+          "eventId": "seller-789-54321-LowStockWarning-1696176090000",
+          "eventType": "LowStockWarning",
+          "timestamp": 1696176090000,
+          "data": {
+            "productId": 54321,
+            "sellerId": "seller-789",
+            "name": "Bluetooth Headphones",
+            "quantity": 5,
+            "threshold": 10,
+            "category": "Audio",
+            "price": 89.99,
+            "previousQuantity": 25
+          }
+        },
+        {
+          "eventId": "seller-123-11111-LowStockWarning-1696176200000",
+          "eventType": "LowStockWarning",
+          "timestamp": 1696176200000,
+          "data": {
+            "productId": 11111,
+            "sellerId": "seller-123",
+            "name": "Limited Edition Widget",
+            "quantity": 0,
+            "threshold": 10,
+            "category": "Collectibles",
+            "price": 199.99,
+            "previousQuantity": 3
+          }
+        }
+      ]
+    }
+  }
+}
