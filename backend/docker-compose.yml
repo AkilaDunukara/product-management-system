@@ -12,7 +12,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/migrations:/docker-entrypoint-initdb.d
+      - ./migrations:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -24,6 +24,8 @@ services:
     restart: unless-stopped
 
   redis:
+    env_file:
+      - ./.env
     image: redis:7-alpine
     container_name: pms-redis
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
@@ -115,6 +117,8 @@ services:
       - pms-network
 
   localstack:
+    env_file:
+      - ./.env
     image: localstack/localstack:latest
     container_name: pms-localstack
     ports:
@@ -123,12 +127,13 @@ services:
     environment:
       SERVICES: s3,dynamodb
       DEBUG: 0
-      DATA_DIR: /tmp/localstack/data
+      DATA_DIR: /var/lib/localstack
+      TMPDIR: /var/lib/localstack/tmp
       AWS_DEFAULT_REGION: ${AWS_REGION}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     volumes:
-      - localstack_data:/tmp/localstack
+      - localstack_data:/var/lib/localstack
       - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
@@ -141,6 +146,8 @@ services:
     restart: unless-stopped
 
   localstack-init:
+    env_file:
+      - ./.env
     image: amazon/aws-cli:latest
     container_name: pms-localstack-init
     depends_on:
@@ -173,8 +180,10 @@ services:
       - pms-network
 
   api-server:
+    env_file:
+      - ./.env
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
       target: api-server
     container_name: pms-api-server
@@ -210,7 +219,7 @@ services:
       RATE_LIMIT_BULK: ${RATE_LIMIT_BULK}
       LOW_STOCK_THRESHOLD: ${LOW_STOCK_THRESHOLD}
     volumes:
-      - ./backend:/app
+      - .:/app
       - /app/node_modules
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
@@ -223,8 +232,10 @@ services:
     restart: unless-stopped
 
   notification-service:
+    env_file:
+      - ./.env
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
       target: notification-service
     container_name: pms-notification-service
@@ -253,7 +264,7 @@ services:
       BACKOFF_MULTIPLIER: 2
       MAX_RETRY_DELAY_MS: 10000
     volumes:
-      - ./backend:/app
+      - .:/app
       - /app/node_modules
     healthcheck:
       test: ["CMD", "pgrep", "-f", "node"]
@@ -266,8 +277,10 @@ services:
     restart: unless-stopped
 
   analytics-service:
+    env_file:
+      - ./.env
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
       target: analytics-service
     container_name: pms-analytics-service
@@ -294,7 +307,7 @@ services:
       BACKOFF_MULTIPLIER: 2
       MAX_RETRY_DELAY_MS: 60000
     volumes:
-      - ./backend:/app
+      - .:/app
       - /app/node_modules
     healthcheck:
       test: ["CMD", "pgrep", "-f", "node"]
