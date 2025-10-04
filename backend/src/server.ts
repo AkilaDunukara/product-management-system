@@ -1,20 +1,30 @@
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const compression = require('compression');
-require('dotenv').config();
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import compression from 'compression';
+import dotenv from 'dotenv';
 
-const { initializeDatabase } = require('./config/database');
-const { initializeKafka } = require('./config/kafka');
-const { initializeRedis } = require('./config/redis');
-const errorHandler = require('./middleware/errorHandler');
-const rateLimiter = require('./middleware/rateLimiter');
-const authMiddleware = require('./middleware/auth');
+dotenv.config();
+
+// Import configuration
+import { initializeDatabase } from './config/database';
+import { initializeKafka } from './config/kafka';
+import { initializeRedis } from './config/redis';
+
+// Import middleware
+import errorHandler from './middleware/errorHandler';
+import rateLimiter from './middleware/rateLimiter';
+import authMiddleware from './middleware/auth';
 
 // Import routes
-const productRoutes = require('./routes/products');
-const eventRoutes = require('./routes/events');
-const healthRoutes = require('./routes/health');
+import productRoutes from './routes/products';
+import eventRoutes from './routes/events';
+import healthRoutes from './routes/health';
+
+/**
+ * Product Management API Server
+ * Express.js application with event-driven architecture
+ */
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -34,7 +44,7 @@ app.use(rateLimiter);
 // Authentication middleware for API routes
 app.use('/api', authMiddleware);
 
-// Routes
+// API routes
 app.use('/api/products', productRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/health', healthRoutes);
@@ -53,27 +63,27 @@ app.get('/', (req, res) => {
   });
 });
 
-// Error handling middleware (must be last)
+// Global error handler (must be last)
 app.use(errorHandler);
 
-// Initialize services and start server
-async function startServer() {
+/**
+ * Initialize all services and start the server
+ */
+
+async function startServer(): Promise<void> {
   try {
     console.log('🚀 Starting Product Management API...');
 
-    // Initialize database connection
+    // Initialize all services
     await initializeDatabase();
     console.log('✅ Database connected');
 
-    // Initialize Kafka producer
     await initializeKafka();
     console.log('✅ Kafka producer connected');
 
-    // Initialize Redis connection
     await initializeRedis();
     console.log('✅ Redis connected');
 
-    // Start server
     app.listen(PORT, () => {
       console.log(`🌟 Server running on port ${PORT}`);
       console.log(`📖 Health check: http://localhost:${PORT}/health`);
@@ -85,12 +95,13 @@ async function startServer() {
   }
 }
 
-// Graceful shutdown
-const gracefulShutdown = async (signal) => {
+/**
+ * Graceful shutdown handler
+ */
+const gracefulShutdown = async (signal: string): Promise<void> => {
   console.log(`\n📡 Received ${signal}, shutting down gracefully...`);
   
   try {
-    // Add cleanup logic here if needed
     console.log('✅ Cleanup completed');
     process.exit(0);
   } catch (error) {
@@ -99,10 +110,11 @@ const gracefulShutdown = async (signal) => {
   }
 };
 
+// Handle graceful shutdown
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-// Handle uncaught exceptions
+// Handle uncaught errors
 process.on('uncaughtException', (error) => {
   console.error('💥 Uncaught Exception:', error);
   process.exit(1);
@@ -113,4 +125,5 @@ process.on('unhandledRejection', (reason, promise) => {
   process.exit(1);
 });
 
+// Start the server
 startServer();

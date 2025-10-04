@@ -1,5 +1,10 @@
-const express = require('express');
-const { getSubClient } = require('../config/redis');
+import express from 'express';
+import { getSubClient } from '../config/redis';
+
+/**
+ * Event Routes - Server-Sent Events implementation
+ * Provides real-time notifications via Redis pub/sub integration
+ */
 
 const router = express.Router();
 
@@ -11,17 +16,17 @@ router.get('/stream', async (req, res) => {
   
   console.log(`🔌 SSE connection established for seller ${sellerId}`);
 
-  // Set SSE headers
+  // Set SSE headers for proper streaming
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Cache-Control',
-    'X-Accel-Buffering': 'no' // Disable proxy buffering
+    'X-Accel-Buffering': 'no' // Disable nginx buffering
   });
 
-  // Send initial connection event
+  // Send initial connection confirmation
   res.write(`data: ${JSON.stringify({
     type: 'connected',
     sellerId: sellerId,
@@ -29,14 +34,14 @@ router.get('/stream', async (req, res) => {
     message: 'SSE connection established'
   })}\n\n`);
 
-  let heartbeatInterval;
+  let heartbeatInterval: NodeJS.Timeout;
   let isConnected = true;
 
   try {
+    // Subscribe to seller-specific notification channel
     const subClient = getSubClient();
     const channel = `notifications:${sellerId}`;
 
-    // Subscribe to seller-specific notifications
     await subClient.subscribe(channel, (message) => {
       if (!isConnected) return;
       
@@ -56,14 +61,14 @@ router.get('/stream', async (req, res) => {
       }
     });
 
-    // Heartbeat to keep connection alive
+    // Send heartbeat every 30 seconds to keep connection alive
     heartbeatInterval = setInterval(() => {
       if (isConnected) {
         res.write(': heartbeat\n\n');
       }
     }, 30000);
 
-    // Handle client disconnect
+    // Cleanup function for connection termination
     const cleanup = async () => {
       if (!isConnected) return;
       isConnected = false;
@@ -81,6 +86,7 @@ router.get('/stream', async (req, res) => {
       }
     };
 
+    // Handle connection cleanup on close or error
     req.on('close', cleanup);
     req.on('error', cleanup);
 
@@ -96,4 +102,4 @@ router.get('/stream', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

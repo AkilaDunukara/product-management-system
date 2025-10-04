@@ -1,21 +1,18 @@
-const { createClient } = require('redis');
+import { createClient, RedisClientType } from 'redis';
 
-let redisClient;
-let pubClient;
-let subClient;
+let redisClient: RedisClientType;
+let pubClient: RedisClientType;
+let subClient: RedisClientType;
 
-const initializeRedis = async () => {
+export const initializeRedis = async (): Promise<void> => {
   const redisConfig = {
     host: process.env.REDIS_HOST || 'localhost',
-    port: process.env.REDIS_PORT || 6379,
+    port: parseInt(process.env.REDIS_PORT || '6379'),
     password: process.env.REDIS_PASSWORD,
-    retryDelayOnFailover: 100,
-    maxRetriesPerRequest: 3
   };
 
   console.log(`🔗 Connecting to Redis at ${redisConfig.host}:${redisConfig.port}`);
 
-  // Main Redis client for rate limiting
   redisClient = createClient({
     socket: {
       host: redisConfig.host,
@@ -24,7 +21,6 @@ const initializeRedis = async () => {
     password: redisConfig.password
   });
 
-  // Pub/Sub clients for SSE
   pubClient = createClient({
     socket: {
       host: redisConfig.host,
@@ -41,12 +37,10 @@ const initializeRedis = async () => {
     password: redisConfig.password
   });
 
-  // Error handlers
   redisClient.on('error', (err) => console.error('Redis Client Error:', err));
   pubClient.on('error', (err) => console.error('Redis Pub Client Error:', err));
   subClient.on('error', (err) => console.error('Redis Sub Client Error:', err));
 
-  // Connect all clients
   await Promise.all([
     redisClient.connect(),
     pubClient.connect(),
@@ -56,30 +50,23 @@ const initializeRedis = async () => {
   console.log('✅ All Redis clients connected');
 };
 
-const getRedisClient = () => {
+export const getRedisClient = (): RedisClientType => {
   if (!redisClient) {
     throw new Error('Redis client not initialized. Call initializeRedis() first.');
   }
   return redisClient;
 };
 
-const getPubClient = () => {
+export const getPubClient = (): RedisClientType => {
   if (!pubClient) {
     throw new Error('Redis pub client not initialized. Call initializeRedis() first.');
   }
   return pubClient;
 };
 
-const getSubClient = () => {
+export const getSubClient = (): RedisClientType => {
   if (!subClient) {
     throw new Error('Redis sub client not initialized. Call initializeRedis() first.');
   }
   return subClient;
-};
-
-module.exports = {
-  initializeRedis,
-  getRedisClient,
-  getPubClient,
-  getSubClient
 };

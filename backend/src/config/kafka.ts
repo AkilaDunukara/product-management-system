@@ -1,8 +1,9 @@
-const { Kafka } = require('kafkajs');
+import { Kafka, Producer } from 'kafkajs';
+import { KafkaEvent } from '../types';
 
-let producer;
+let producer: Producer;
 
-const initializeKafka = async () => {
+export const initializeKafka = async (): Promise<void> => {
   const kafka = new Kafka({
     clientId: process.env.KAFKA_CLIENT_ID || 'api-server',
     brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
@@ -21,7 +22,7 @@ const initializeKafka = async () => {
   await producer.connect();
 };
 
-const publishEvent = async (topic, event) => {
+export const publishEvent = async (topic: string, event: KafkaEvent): Promise<void> => {
   if (!producer) {
     throw new Error('Kafka producer not initialized');
   }
@@ -39,27 +40,19 @@ const publishEvent = async (topic, event) => {
   });
 };
 
-// Simple hash function for consistent partitioning
-const hashCode = (str) => {
+const hashCode = (str: string): number => {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
+    hash = hash & hash;
   }
   return hash;
 };
 
-const getProducer = () => {
+export const getProducer = (): Producer => {
   if (!producer) {
     throw new Error('Kafka producer not initialized');
   }
   return producer;
 };
-
-module.exports = {
-  initializeKafka,
-  publishEvent,
-  getProducer
-};
-

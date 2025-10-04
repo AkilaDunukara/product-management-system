@@ -1,8 +1,25 @@
+import { Request, Response, NextFunction } from 'express';
+
 /**
  * Global error handling middleware
  * Handles different types of errors and returns consistent error responses
  */
-const errorHandler = (err, req, res, next) => {
+
+interface JoiError extends Error {
+  isJoi: boolean;
+  details: Array<{
+    message: string;
+    path: string[];
+    type: string;
+    context?: { value?: any };
+  }>;
+}
+
+interface DatabaseError extends Error {
+  code?: string;
+}
+
+const errorHandler = (err: any, req: Request, res: Response, next: NextFunction): void => {
   console.error('🚨 Error occurred:', {
     message: err.message,
     stack: err.stack,
@@ -14,96 +31,104 @@ const errorHandler = (err, req, res, next) => {
 
   // Joi validation errors
   if (err.isJoi) {
-    return res.status(400).json({
+    const joiError = err as JoiError;
+    res.status(400).json({
       error: 'Bad Request',
-      message: `Validation error: ${err.details[0].message}`,
+      message: `Validation error: ${joiError.details[0].message}`,
       error_code: 'VALIDATION_ERROR',
       details: {
-        field: err.details[0].path.join('.'),
-        constraint: err.details[0].type,
-        value: err.details[0].context?.value
+        field: joiError.details[0].path.join('.'),
+        constraint: joiError.details[0].type,
+        value: joiError.details[0].context?.value
       }
     });
+    return;
   }
 
+  const dbError = err as DatabaseError;
+  
   // PostgreSQL errors
-  if (err.code === '23505') { // Unique constraint violation
-    return res.status(409).json({
+  if (dbError.code === '23505') { // Unique constraint violation
+    res.status(409).json({
       error: 'Conflict',
       message: 'Resource already exists',
       error_code: 'DUPLICATE_RESOURCE'
     });
+    return;
   }
 
-  if (err.code === '23503') { // Foreign key constraint violation
-    return res.status(400).json({
+  if (dbError.code === '23503') { // Foreign key constraint violation
+    res.status(400).json({
       error: 'Bad Request',
       message: 'Invalid reference to related resource',
       error_code: 'INVALID_REFERENCE'
     });
+    return;
   }
 
-  if (err.code === '23514') { // Check constraint violation
-    return res.status(400).json({
+  if (dbError.code === '23514') { // Check constraint violation
+    res.status(400).json({
       error: 'Bad Request',
       message: 'Data violates database constraints',
       error_code: 'CONSTRAINT_VIOLATION'
     });
+    return;
   }
 
-  // Multer errors (file upload)
-  if (err.code === 'LIMIT_FILE_SIZE') {
-    return res.status(400).json({
+  if (dbError.code === 'LIMIT_FILE_SIZE') {
+    res.status(400).json({
       error: 'Bad Request',
       message: 'File too large. Maximum size is 10MB.',
       error_code: 'FILE_TOO_LARGE'
     });
+    return;
   }
 
-  if (err.code === 'LIMIT_UNEXPECTED_FILE') {
-    return res.status(400).json({
+  if (dbError.code === 'LIMIT_UNEXPECTED_FILE') {
+    res.status(400).json({
       error: 'Bad Request',
       message: 'Unexpected file field. Expected field name: "file"',
       error_code: 'INVALID_FILE_FIELD'
     });
+    return;
   }
 
   if (err.message === 'Only CSV files are allowed') {
-    return res.status(400).json({
+    res.status(400).json({
       error: 'Bad Request',
       message: 'Invalid file type. Only CSV files are allowed.',
       error_code: 'INVALID_FILE_TYPE'
     });
+    return;
   }
 
-  // Redis connection errors
   if (err.message && err.message.includes('Redis')) {
-    return res.status(503).json({
+    res.status(503).json({
       error: 'Service Unavailable',
       message: 'Rate limiting service temporarily unavailable',
       error_code: 'REDIS_ERROR'
     });
+    return;
   }
 
-  // Kafka errors
   if (err.message && err.message.includes('Kafka')) {
-    return res.status(503).json({
+    res.status(503).json({
       error: 'Service Unavailable',
       message: 'Event publishing service temporarily unavailable',
       error_code: 'KAFKA_ERROR'
     });
+    return;
   }
 
-  // Database connection errors
-  if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND') {
-    return res.status(503).json({
+  if (dbError.code === 'ECONNREFUSED' || dbError.code === 'ENOTFOUND') {
+    res.status(503).json({
       error: 'Service Unavailable',
       message: 'Database service temporarily unavailable',
       error_code: 'DATABASE_ERROR'
     });
+    return;
   }
 
-  // Default server error
   res.status(500).json({
     error: 'Internal Server Error',
     message: 'An unexpected error occurred. Please try again later.',
@@ -117,4 +142,4 @@ const errorHandler = (err, req, res, next) => {
   });
 };
 
-module.exports = errorHandler;
+export default errorHandler;

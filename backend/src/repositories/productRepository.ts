@@ -1,19 +1,22 @@
-const { getPool } = require('../config/database');
+import { getPool } from '../config/database';
+import { Product, ProductCreateData, ProductUpdateData, ProductFilters } from '../types';
 
 /**
- * Product Repository - Data Access Layer
- * Handles all database operations for products
+ * Product Repository - Database access layer for product operations
+ * Handles all PostgreSQL queries with proper transaction management
  */
+
 class ProductRepository {
   
   /**
-   * Create a new product in the database
+   * Create a new product with transaction safety
    */
-  async create(sellerId, productData) {
+  async create(sellerId: string, productData: ProductCreateData): Promise<Product> {
     const pool = getPool();
     const client = await pool.connect();
 
     try {
+      // Start transaction for data consistency
       await client.query('BEGIN');
 
       const query = `
@@ -34,9 +37,11 @@ class ProductRepository {
       const result = await client.query(query, values);
       const product = result.rows[0];
 
+      // Commit transaction on success
       await client.query('COMMIT');
       return product;
     } catch (error) {
+      // Rollback transaction on error
       await client.query('ROLLBACK');
       throw error;
     } finally {
@@ -45,9 +50,9 @@ class ProductRepository {
   }
 
   /**
-   * Find products by seller with filters and pagination
+   * Find products by seller with filtering, sorting, and pagination
    */
-  async findBySeller(sellerId, filters = {}) {
+  async findBySeller(sellerId: string, filters: ProductFilters = {}): Promise<Product[]> {
     const pool = getPool();
     
     let query = `
@@ -55,10 +60,11 @@ class ProductRepository {
       WHERE seller_id = $1 AND deleted_at IS NULL
     `;
     
-    const values = [sellerId];
+    const values: any[] = [sellerId];
     let paramCount = 1;
 
-    // Apply filters
+    // Build dynamic WHERE clauses based on filters
+
     if (filters.category) {
       query += ` AND category = $${++paramCount}`;
       values.push(filters.category);
@@ -74,7 +80,7 @@ class ProductRepository {
       values.push(filters.max_quantity);
     }
 
-    // Add sorting
+    // Add sorting with validation
     const sortColumn = filters.sort_by || 'created_at';
     const sortOrder = filters.sort_order || 'desc';
     query += ` ORDER BY ${sortColumn} ${sortOrder.toUpperCase()}`;
@@ -90,16 +96,16 @@ class ProductRepository {
   }
 
   /**
-   * Count products by seller with filters
+   * Count products by seller with same filters (for pagination)
    */
-  async countBySeller(sellerId, filters = {}) {
+  async countBySeller(sellerId: string, filters: ProductFilters = {}): Promise<number> {
     const pool = getPool();
     
     let countQuery = `
       SELECT COUNT(*) FROM products 
       WHERE seller_id = $1 AND deleted_at IS NULL
     `;
-    const countValues = [sellerId];
+    const countValues: any[] = [sellerId];
     let countParamCount = 1;
 
     if (filters.category) {
@@ -122,9 +128,9 @@ class ProductRepository {
   }
 
   /**
-   * Find a product by ID and seller
+   * Find a single product by ID and seller (for authorization)
    */
-  async findByIdAndSeller(productId, sellerId) {
+  async findByIdAndSeller(productId: number, sellerId: string): Promise<Product | null> {
     const pool = getPool();
     
     const query = `
@@ -137,16 +143,17 @@ class ProductRepository {
   }
 
   /**
-   * Update a product by ID and seller
+   * Update product with transaction safety and return both current and updated versions
    */
-  async updateByIdAndSeller(productId, sellerId, updateData) {
+  async updateByIdAndSeller(productId: number, sellerId: string, updateData: ProductUpdateData): Promise<{ current: Product | null; updated: Product | null }> {
     const pool = getPool();
     const client = await pool.connect();
 
     try {
+      // Start transaction
       await client.query('BEGIN');
 
-      // Get current product first
+      // Get current product for comparison
       const currentResult = await client.query(
         'SELECT * FROM products WHERE id = $1 AND seller_id = $2 AND deleted_at IS NULL',
         [productId, sellerId]
@@ -159,9 +166,9 @@ class ProductRepository {
 
       const currentProduct = currentResult.rows[0];
 
-      // Build update query dynamically
-      const updateFields = [];
-      const values = [];
+      // Build dynamic UPDATE query
+      const updateFields: string[] = [];
+      const values: any[] = [];
       let paramCount = 0;
 
       Object.entries(updateData).forEach(([key, value]) => {
@@ -176,6 +183,7 @@ class ProductRepository {
         return { current: currentProduct, updated: currentProduct };
       }
 
+      // Execute update
       values.push(productId, sellerId);
       const query = `
         UPDATE products 
@@ -198,9 +206,9 @@ class ProductRepository {
   }
 
   /**
-   * Soft delete a product by ID and seller
+   * Soft delete a product (sets deleted_at timestamp)
    */
-  async deleteByIdAndSeller(productId, sellerId) {
+  async deleteByIdAndSeller(productId: number, sellerId: string): Promise<Product | null> {
     const pool = getPool();
     const client = await pool.connect();
 
@@ -233,18 +241,19 @@ class ProductRepository {
   }
 
   /**
-   * Batch insert products (for CSV import)
+   * Batch insert multiple products efficiently
    */
-  async batchInsert(sellerId, products) {
+  async batchInsert(sellerId: string, products: ProductCreateData[]): Promise<Product[]> {
     const pool = getPool();
     const client = await pool.connect();
 
     try {
+      // Start transaction for batch operation
       await client.query('BEGIN');
 
-      // Build batch insert query
-      const values = [];
-      const placeholders = [];
+      // Build batch insert query with placeholders
+      const values: any[] = [];
+      const placeholders: string[] = [];
       
       products.forEach((product, index) => {
         const baseIndex = index * 6;
@@ -278,10 +287,7 @@ class ProductRepository {
     }
   }
 
-  /**
-   * Find products by seller and quantity threshold (for low stock checks)
-   */
-  async findLowStockProducts(sellerId, threshold) {
+  async findLowStockProducts(sellerId: string, threshold: number): Promise<Product[]> {
     const pool = getPool();
     
     const query = `
@@ -294,10 +300,12 @@ class ProductRepository {
     return result.rows;
   }
 
-  /**
-   * Get product statistics for a seller
-   */
-  async getSellerStats(sellerId) {
+  async getSellerStats(sellerId: string): Promise<{
+    total_products: number;
+    total_quantity: number;
+    average_price: number;
+    low_stock_count: number;
+  }> {
     const pool = getPool();
     
     const query = `
@@ -323,4 +331,4 @@ class ProductRepository {
   }
 }
 
-module.exports = new ProductRepository();
+export default new ProductRepository();

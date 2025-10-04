@@ -1,5 +1,6 @@
-const productRepository = require('../repositories/productRepository');
-const { publishEvent } = require('../config/kafka');
+import productRepository from '../repositories/productRepository';
+import { publishEvent } from '../config/kafka';
+import { Product, ProductCreateData, ProductUpdateData, ProductFilters, PaginationResult } from '../types';
 
 /**
  * Product service handling all product-related business logic
@@ -10,14 +11,11 @@ class ProductService {
   /**
    * Create a new product
    */
-  async createProduct(sellerId, productData) {
-    // Use repository for data access
+  async createProduct(sellerId: string, productData: ProductCreateData): Promise<Product> {
     const product = await productRepository.create(sellerId, productData);
 
-    // Publish ProductCreated event
     await this.publishProductEvent('product.created', 'ProductCreated', product);
 
-    // Check for low stock and publish warning if needed
     const threshold = parseInt(process.env.LOW_STOCK_THRESHOLD || '10');
     if (product.quantity < threshold) {
       await this.publishLowStockEvent(product);
@@ -29,8 +27,7 @@ class ProductService {
   /**
    * Get products with filtering and pagination
    */
-  async getProducts(sellerId, filters) {
-    // Use repository for data access
+  async getProducts(sellerId: string, filters: ProductFilters): Promise<PaginationResult<Product>> {
     const [products, total] = await Promise.all([
       productRepository.findBySeller(sellerId, filters),
       productRepository.countBySeller(sellerId, filters)
@@ -53,7 +50,7 @@ class ProductService {
   /**
    * Get a single product by ID
    */
-  async getProductById(sellerId, productId) {
+  async getProductById(sellerId: string, productId: number): Promise<Product | null> {
     const product = await productRepository.findByIdAndSeller(productId, sellerId);
     
     if (!product) {
@@ -66,41 +63,37 @@ class ProductService {
   /**
    * Update an existing product
    */
-  async updateProduct(sellerId, productId, updateData) {
-    // Use repository for data access
+  async updateProduct(sellerId: string, productId: number, updateData: ProductUpdateData): Promise<Product | null> {
     const { current, updated } = await productRepository.updateByIdAndSeller(productId, sellerId, updateData);
 
     if (!current) {
       return null;
     }
 
-    // Publish ProductUpdated event
-    await this.publishProductEvent('product.updated', 'ProductUpdated', updated, current);
+    await this.publishProductEvent('product.updated', 'ProductUpdated', updated!, current);
 
     // Check for low stock warning
-    const newQuantity = updated.quantity;
+    const newQuantity = updated!.quantity;
     const oldQuantity = current.quantity;
     const threshold = parseInt(process.env.LOW_STOCK_THRESHOLD || '10');
 
     if (newQuantity < threshold && oldQuantity >= threshold) {
-      await this.publishLowStockEvent(updated);
+      await this.publishLowStockEvent(updated!);
     }
 
-    return this.formatProduct(updated);
+    return this.formatProduct(updated!);
   }
 
   /**
    * Soft delete a product
    */
-  async deleteProduct(sellerId, productId) {
-    // Use repository for data access
+  async deleteProduct(sellerId: string, productId: number): Promise<{ deleted_id: number } | null> {
     const deletedProduct = await productRepository.deleteByIdAndSeller(productId, sellerId);
 
     if (!deletedProduct) {
       return null;
     }
 
-    // Publish ProductDeleted event
     await this.publishProductEvent('product.deleted', 'ProductDeleted', deletedProduct);
 
     return { deleted_id: productId };
@@ -109,7 +102,7 @@ class ProductService {
   /**
    * Publish product lifecycle events to Kafka
    */
-  async publishProductEvent(topic, eventType, product, previousProduct = null) {
+  private async publishProductEvent(topic: string, eventType: string, product: Product, previousProduct?: Product): Promise<void> {
     const event = {
       eventId: `${product.seller_id}-${product.id}-${eventType}-${Date.now()}`,
       eventType,
@@ -119,7 +112,7 @@ class ProductService {
         sellerId: product.seller_id,
         name: product.name,
         description: product.description,
-        price: parseFloat(product.price),
+        price: parseFloat(product.price.toString()),
         quantity: product.quantity,
         category: product.category,
         createdAt: product.created_at.toISOString(),
@@ -140,7 +133,7 @@ class ProductService {
   /**
    * Publish low stock warning event
    */
-  async publishLowStockEvent(product) {
+  private async publishLowStockEvent(product: Product): Promise<void> {
     const threshold = parseInt(process.env.LOW_STOCK_THRESHOLD || '10');
     const event = {
       eventId: `${product.seller_id}-${product.id}-LowStockWarning-${Date.now()}`,
@@ -161,26 +154,25 @@ class ProductService {
       console.log(`⚠️ Published low stock warning for product ${product.id}`);
     } catch (error) {
       console.error('❌ Failed to publish low stock event:', error);
-      // Don't throw error to avoid breaking the main operation
     }
   }
 
   /**
-   * Format product data for API response
+   * Format product data for API responses
    */
-  formatProduct(product) {
+  private formatProduct(product: Product): Product {
     return {
       id: product.id,
       seller_id: product.seller_id,
       name: product.name,
       description: product.description,
-      price: parseFloat(product.price),
+      price: parseFloat(product.price.toString()),
       quantity: product.quantity,
       category: product.category,
-      created_at: product.created_at.toISOString(),
-      updated_at: product.updated_at.toISOString()
+      created_at: product.created_at,
+      updated_at: product.updated_at
     };
   }
 }
 
-module.exports = new ProductService();
+export default new ProductService();

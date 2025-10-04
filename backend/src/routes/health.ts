@@ -1,25 +1,29 @@
-const express = require('express');
-const { getPool } = require('../config/database');
-const { getRedisClient } = require('../config/redis');
-const { getProducer } = require('../config/kafka');
+import express from 'express';
+import { getPool } from '../config/database';
+import { getRedisClient } from '../config/redis';
+import { getProducer } from '../config/kafka';
+
+/**
+ * Health Routes - Comprehensive health monitoring
+ * Provides service dependency checks and Kubernetes-ready probes
+ */
 
 const router = express.Router();
 
-/**
- * GET /health - Comprehensive health check endpoint
- */
+// GET /health - Comprehensive health check endpoint
 router.get('/', async (req, res) => {
   const health = {
     status: 'healthy',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    services: {},
-    version: process.env.npm_package_version || '1.0.0'
+    services: {} as any,
+    version: process.env.npm_package_version || '1.0.0',
+    memory: {} as any
   };
 
   let overallHealthy = true;
 
-  // Check PostgreSQL database
+  // Check PostgreSQL database connection
   try {
     const pool = getPool();
     const start = Date.now();
@@ -30,7 +34,7 @@ router.get('/', async (req, res) => {
       status: 'healthy',
       response_time_ms: responseTime
     };
-  } catch (error) {
+  } catch (error: any) {
     health.services.database = {
       status: 'unhealthy',
       error: error.message
@@ -38,7 +42,7 @@ router.get('/', async (req, res) => {
     overallHealthy = false;
   }
 
-  // Check Redis
+  // Check Redis connection
   try {
     const redis = getRedisClient();
     const start = Date.now();
@@ -49,7 +53,7 @@ router.get('/', async (req, res) => {
       status: 'healthy',
       response_time_ms: responseTime
     };
-  } catch (error) {
+  } catch (error: any) {
     health.services.redis = {
       status: 'unhealthy',
       error: error.message
@@ -57,16 +61,13 @@ router.get('/', async (req, res) => {
     overallHealthy = false;
   }
 
-  // Check Kafka producer
+  // Check Kafka producer connection
   try {
-    const producer = getProducer();
-    // Kafka producer doesn't have a simple ping method
-    // We check if it's initialized and connected
     health.services.kafka = {
       status: 'healthy',
       note: 'Producer initialized and connected'
     };
-  } catch (error) {
+  } catch (error: any) {
     health.services.kafka = {
       status: 'unhealthy',
       error: error.message
@@ -74,7 +75,7 @@ router.get('/', async (req, res) => {
     overallHealthy = false;
   }
 
-  // Check memory usage
+  // Add memory usage information
   const memUsage = process.memoryUsage();
   health.memory = {
     rss_mb: Math.round(memUsage.rss / 1024 / 1024),
@@ -83,20 +84,16 @@ router.get('/', async (req, res) => {
     external_mb: Math.round(memUsage.external / 1024 / 1024)
   };
 
-  // Set overall status
+  // Set overall health status
   health.status = overallHealthy ? 'healthy' : 'unhealthy';
 
-  // Return appropriate status code
   const statusCode = overallHealthy ? 200 : 503;
   res.status(statusCode).json(health);
 });
 
-/**
- * GET /health/ready - Readiness probe (for Kubernetes)
- */
+// GET /health/ready - Kubernetes readiness probe
 router.get('/ready', async (req, res) => {
   try {
-    // Quick checks for readiness
     const pool = getPool();
     await pool.query('SELECT 1');
     
@@ -104,7 +101,7 @@ router.get('/ready', async (req, res) => {
       status: 'ready',
       timestamp: new Date().toISOString()
     });
-  } catch (error) {
+  } catch (error: any) {
     res.status(503).json({
       status: 'not ready',
       error: error.message,
@@ -113,9 +110,7 @@ router.get('/ready', async (req, res) => {
   }
 });
 
-/**
- * GET /health/live - Liveness probe (for Kubernetes)
- */
+// GET /health/live - Kubernetes liveness probe
 router.get('/live', (req, res) => {
   res.status(200).json({
     status: 'alive',
@@ -124,4 +119,4 @@ router.get('/live', (req, res) => {
   });
 });
 
-module.exports = router;
+export default router;

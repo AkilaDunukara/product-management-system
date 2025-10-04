@@ -1,28 +1,30 @@
-const csv = require('csv-parser');
-const { Transform, Readable } = require('stream');
-const productRepository = require('../repositories/productRepository');
-const { publishEvent } = require('../config/kafka');
-const { productCreateSchema } = require('../validation/productSchemas');
+import csv from 'csv-parser';
+import { Transform, Readable } from 'stream';
+import productRepository from '../repositories/productRepository';
+import { publishEvent } from '../config/kafka';
+import { productCreateSchema } from '../validation/productSchemas';
+import { Product, ProductCreateData, ImportResult } from '../types';
 
 /**
  * CSV Import Service using Node.js Streams for memory-efficient processing
  * Handles large CSV files with batch processing and validation
  */
+
 class CsvImportService {
   
   /**
    * Process CSV import with streaming and batch processing
    */
-  async processImport(sellerId, fileBuffer) {
+  async processImport(sellerId: string, fileBuffer: Buffer): Promise<ImportResult> {
     return new Promise((resolve, reject) => {
-      const results = {
+      const results: ImportResult = {
         processed: 0,
         successful: 0,
         failed: 0,
         errors: []
       };
 
-      let batch = [];
+      let batch: ProductCreateData[] = [];
       const batchSize = 1000;
       const maxErrors = 100; // Limit error collection to prevent memory issues
 
@@ -31,7 +33,7 @@ class CsvImportService {
 
       const validationTransform = new Transform({
         objectMode: true,
-        transform: async (chunk, encoding, callback) => {
+        transform: async (chunk: any, encoding: BufferEncoding, callback: Function) => {
           try {
             results.processed++;
 
@@ -65,11 +67,11 @@ class CsvImportService {
                 const count = await this.processBatch(sellerId, batch.slice());
                 results.successful += count;
                 console.log(`✅ Processed batch of ${count} products`);
-              } catch (err) {
+              } catch (err: any) {
                 results.failed += batch.length;
                 if (results.errors.length < maxErrors) {
                   results.errors.push({
-                    batch: Math.floor(results.processed / batchSize),
+                    row: Math.floor(results.processed / batchSize),
                     error: err.message
                   });
                 }
@@ -79,7 +81,7 @@ class CsvImportService {
             }
 
             callback();
-          } catch (err) {
+          } catch (err: any) {
             results.failed++;
             if (results.errors.length < maxErrors) {
               results.errors.push({
@@ -92,18 +94,18 @@ class CsvImportService {
           }
         },
 
-        flush: async (callback) => {
+        flush: async (callback: Function) => {
           // Process remaining batch
           if (batch.length > 0) {
             try {
               const count = await this.processBatch(sellerId, batch);
               results.successful += count;
               console.log(`✅ Processed final batch of ${count} products`);
-            } catch (err) {
+            } catch (err: any) {
               results.failed += batch.length;
               if (results.errors.length < maxErrors) {
                 results.errors.push({
-                  batch: 'final',
+                  row: results.processed,
                   error: err.message
                 });
               }
@@ -111,10 +113,10 @@ class CsvImportService {
             }
           }
 
-          // Add summary to results
           if (results.errors.length >= maxErrors) {
             results.errors.push({
-              note: `Error limit reached. Only showing first ${maxErrors} errors.`
+              row: -1,
+              error: `Error limit reached. Only showing first ${maxErrors} errors.`
             });
           }
 
@@ -136,8 +138,7 @@ class CsvImportService {
   /**
    * Process a batch of products with database transaction
    */
-  async processBatch(sellerId, products) {
-    // Use repository for data access
+  private async processBatch(sellerId: string, products: ProductCreateData[]): Promise<number> {
     const insertedProducts = await productRepository.batchInsert(sellerId, products);
 
     // Publish batch events asynchronously (don't wait)
@@ -151,12 +152,12 @@ class CsvImportService {
   /**
    * Publish events for batch of products
    */
-  async publishBatchEvents(products) {
+  private async publishBatchEvents(products: Product[]): Promise<void> {
     const threshold = parseInt(process.env.LOW_STOCK_THRESHOLD || '10');
     
     // Group products by seller for batch events
-    const productsBySeller = {};
-    const lowStockProducts = [];
+    const productsBySeller: { [key: string]: Product[] } = {};
+    const lowStockProducts: Product[] = [];
 
     products.forEach(product => {
       if (!productsBySeller[product.seller_id]) {
@@ -181,7 +182,7 @@ class CsvImportService {
           products: sellerProducts.map(p => ({
             productId: p.id,
             name: p.name,
-            price: parseFloat(p.price),
+            price: parseFloat(p.price.toString()),
             quantity: p.quantity,
             category: p.category
           }))
@@ -227,7 +228,7 @@ class CsvImportService {
   /**
    * Validate CSV headers
    */
-  validateHeaders(headers) {
+  validateHeaders(headers: string[]): boolean {
     const requiredHeaders = ['name', 'price', 'quantity', 'category'];
     const missingHeaders = requiredHeaders.filter(header => !headers.includes(header));
     
@@ -241,9 +242,7 @@ class CsvImportService {
   /**
    * Get import status (placeholder for future implementation)
    */
-  async getImportStatus(importId) {
-    // This would typically query a database or cache
-    // For now, return a placeholder response
+  async getImportStatus(importId: string): Promise<{ import_id: string; status: string; message: string }> {
     return {
       import_id: importId,
       status: 'completed',
@@ -254,9 +253,7 @@ class CsvImportService {
   /**
    * Cancel import (placeholder for future implementation)
    */
-  async cancelImport(importId) {
-    // This would typically update a database record
-    // For now, return a placeholder response
+  async cancelImport(importId: string): Promise<{ import_id: string; status: string; message: string }> {
     return {
       import_id: importId,
       status: 'cancelled',
@@ -265,4 +262,4 @@ class CsvImportService {
   }
 }
 
-module.exports = new CsvImportService();
+export default new CsvImportService();

@@ -1,11 +1,6 @@
-const Joi = require('joi');
+import Joi from 'joi';
 
-/**
- * Joi validation schemas for product operations
- * Based on OpenAPI specification requirements
- */
-
-const productCreateSchema = Joi.object({
+export const productCreateSchema = Joi.object({
   name: Joi.string()
     .min(1)
     .max(255)
@@ -53,7 +48,7 @@ const productCreateSchema = Joi.object({
     })
 });
 
-const productUpdateSchema = Joi.object({
+export const productUpdateSchema = Joi.object({
   name: Joi.string()
     .min(1)
     .max(255)
@@ -95,7 +90,7 @@ const productUpdateSchema = Joi.object({
   'object.min': 'At least one field must be provided for update'
 });
 
-const productQuerySchema = Joi.object({
+export const productQuerySchema = Joi.object({
   page: Joi.number()
     .integer()
     .min(1)
@@ -152,9 +147,3 @@ const productQuerySchema = Joi.object({
       'any.only': 'Sort order must be either "asc" or "desc"'
     })
 });
-
-module.exports = {
-  productCreateSchema,
-  productUpdateSchema,
-  productQuerySchema
-};

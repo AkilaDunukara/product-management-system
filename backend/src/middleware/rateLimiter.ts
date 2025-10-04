@@ -1,16 +1,18 @@
-const { getRedisClient } = require('../config/redis');
+import { Request, Response, NextFunction } from 'express';
+import { getRedisClient } from '../config/redis';
 
 /**
  * Redis-based rate limiter using sliding window algorithm
  * Supports different limits for standard and bulk operations
  */
-const rateLimiter = async (req, res, next) => {
+const rateLimiter = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const sellerId = req.headers['x-seller-id'];
+    const sellerId = req.headers['x-seller-id'] as string;
     
     // Skip rate limiting if no seller ID (will be caught by auth middleware)
     if (!sellerId) {
-      return next();
+      next();
+      return;
     }
 
     const redis = getRedisClient();
@@ -44,7 +46,7 @@ const rateLimiter = async (req, res, next) => {
         'Retry-After': Math.ceil(windowSize / 1000).toString()
       });
 
-      return res.status(429).json({
+      res.status(429).json({
         error: 'Too Many Requests',
         message: `Rate limit exceeded. Maximum ${limit} requests per ${isBulkOperation ? 'minute' : 'second'} per seller.`,
         error_code: 'RATE_LIMIT_EXCEEDED',
@@ -54,6 +56,7 @@ const rateLimiter = async (req, res, next) => {
           retry_after: Math.ceil(windowSize / 1000)
         }
       });
+      return;
     }
 
     // Add current request to sliding window
@@ -81,4 +84,4 @@ const rateLimiter = async (req, res, next) => {
   }
 };
 
-module.exports = rateLimiter;
+export default rateLimiter;
