@@ -13,7 +13,7 @@ export interface Product {
 
 export interface ProductCreateData {
   name: string;
-  description: string;
+  description?: string;
   price: number;
   quantity: number;
   category: string;

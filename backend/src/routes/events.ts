@@ -33,6 +33,10 @@ router.get('/stream', async (req, res) => {
     timestamp: Date.now(),
     message: 'SSE connection established'
   })}\n\n`);
+  
+  if (res.flush) {
+    res.flush();
+  }
 
   let heartbeatInterval: NodeJS.Timeout;
   let isConnected = true;
@@ -49,6 +53,9 @@ router.get('/stream', async (req, res) => {
         const notification = JSON.parse(message);
         res.write(`event: ${notification.type}\n`);
         res.write(`data: ${JSON.stringify(notification)}\n\n`);
+        if (res.flush) {
+          res.flush();
+        }
         console.log(`📨 Sent ${notification.type} notification to seller ${sellerId}`);
       } catch (error) {
         console.error('❌ Error processing notification:', error);
@@ -57,6 +64,9 @@ router.get('/stream', async (req, res) => {
             type: 'error',
             message: 'Failed to process notification'
           })}\n\n`);
+          if (res.flush) {
+            res.flush();
+          }
         }
       }
     });
@@ -65,6 +75,9 @@ router.get('/stream', async (req, res) => {
     heartbeatInterval = setInterval(() => {
       if (isConnected) {
         res.write(': heartbeat\n\n');
+        if (res.flush) {
+          res.flush();
+        }
       }
     }, 30000);
 
@@ -98,6 +111,9 @@ router.get('/stream', async (req, res) => {
         message: 'Failed to establish event stream',
         error_code: 'SSE_SETUP_ERROR'
       })}\n\n`);
+      if (res.flush) {
+        res.flush();
+      }
     }
   }
 });
