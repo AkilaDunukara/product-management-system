@@ -96,27 +96,18 @@ curl -H "X-Seller-Id: seller-123" http://localhost:3001/api/products
 
 ## Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `NODE_ENV` | Environment mode | `development` |
-| `PORT` | Server port | `3001` |
-| `POSTGRES_HOST` | PostgreSQL host | `postgres` |
-| `POSTGRES_PORT` | PostgreSQL port | `5432` |
-| `POSTGRES_DB` | Database name | `product_management` |
-| `POSTGRES_USER` | Database user | `postgres` |
-| `POSTGRES_PASSWORD` | Database password | `postgres123` |
-| `REDIS_HOST` | Redis host | `redis` |
-| `REDIS_PORT` | Redis port | `6379` |
-| `REDIS_PASSWORD` | Redis password | `redis123` |
-| `KAFKA_BROKERS` | Kafka broker list | `kafka:29092` |
-| `KAFKA_CLIENT_ID` | Kafka client ID | `api-server` |
-| `AWS_ENDPOINT` | LocalStack endpoint | `http://localstack:4566` |
-| `AWS_REGION` | AWS region | `us-east-1` |
-| `AWS_ACCESS_KEY_ID` | AWS access key | `test` |
-| `AWS_SECRET_ACCESS_KEY` | AWS secret key | `test` |
-| `RATE_LIMIT_STANDARD` | Standard rate limit (req/sec) | `100` |
-| `RATE_LIMIT_BULK` | Bulk operation rate limit (req/min) | `5` |
-| `LOW_STOCK_THRESHOLD` | Low stock warning threshold | `10` |
+All required environment variables are documented in `.env.example`. Copy this file to `.env` and adjust values as needed:
+
+```bash
+cp .env.example .env
+```
+
+Key configuration includes:
+- Database connection (PostgreSQL)
+- Cache and pub/sub (Redis)
+- Event streaming (Kafka)
+- AWS services (LocalStack for development)
+- Rate limiting and thresholds
 
 ## Development
 
@@ -180,120 +171,41 @@ CREATE TABLE products (
 
 ### Database Indexes
 
-Two partial indexes optimize common query patterns:
+Two partial indexes optimize common query patterns (excluding soft-deleted products):
 
-1. **`idx_products_seller_id`** - Index on `seller_id` (partial: WHERE deleted_at IS NULL)
-   - **Why**: Most queries filter by seller_id to show products for a specific seller
-   - **Benefit**: Fast lookups for GET /api/products?sellerId=xxx
-   - **Partial**: Only indexes active products (not soft-deleted)
-
-2. **`idx_products_seller_category`** - Composite index on `(seller_id, category)` (partial: WHERE deleted_at IS NULL)
-   - **Why**: Common filtering pattern by seller and category together
-   - **Benefit**: Fast lookups for GET /api/products?sellerId=xxx&category=Electronics
-   - **Partial**: Reduces index size by excluding deleted products
-
-Both indexes exclude soft-deleted products (`WHERE deleted_at IS NULL`) to keep index size small and queries fast.
+1. **`idx_products_seller_id`** - Fast seller-specific queries
+2. **`idx_products_seller_category`** - Fast seller + category filtering
 
 ## Architecture
 
 ### Repository Pattern
 
-The application follows the Repository Pattern for clean separation of concerns:
+Clean separation: Routes → Services → Repositories → Database
 
-- **Controllers (Routes)** - Handle HTTP requests/responses and validation
-- **Services** - Contain business logic and orchestrate operations
-- **Repositories** - Handle data access and database operations
-- **Models** - Data structures and validation schemas
+Benefits: Testable, maintainable, flexible data access layer.
 
-This pattern provides:
-- **Testability** - Easy to mock repositories for unit testing
-- **Maintainability** - Clear separation between business logic and data access
-- **Flexibility** - Easy to switch data sources without changing business logic
-- **Consistency** - Standardized data access patterns
+### Key Features
 
-### Event-Driven Flow
+- **Event Publishing**: Emits events to Kafka for downstream processing
+- **Rate Limiting**: 100 req/sec (standard), 5 req/min (bulk) per seller via Redis
+- **CSV Import**: Streaming with backpressure handling, 1000-row batches
+- **SSE Notifications**: Real-time updates via Redis pub/sub
 
-1. API writes product changes to PostgreSQL
-2. Events emitted to Kafka (product.created, product.updated, product.deleted, product.lowstock)
-3. Notification Service consumes events → writes to DynamoDB → publishes to Redis Pub/Sub
-4. Analytics Service consumes events → Worker Threads process → writes to DynamoDB (hot) → archives to S3 (cold)
-5. SSE endpoint subscribes to Redis → pushes real-time notifications to connected clients
-
-### Rate Limiting
-
-- **Standard endpoints**: 100 requests per second per seller
-- **Bulk operations**: 5 requests per minute per seller
-- **Implementation**: Redis sorted sets with sliding window algorithm
-
-### CSV Import
-
-- **Memory-efficient**: Node.js Streams with backpressure handling
-- **Batch processing**: 1000 rows per batch
-- **Validation**: Joi schema validation for each row
-- **Async processing**: Returns 202 Accepted immediately
+For complete architecture details, see the [main README](../README.md#architecture).
 
 ## Monitoring
 
 ### Health Checks
 
-The `/health` endpoint provides comprehensive service status:
-
-```json
-{
-  "status": "healthy",
-  "timestamp": "2025-10-02T16:30:00.000Z",
-  "uptime": 3600,
-  "services": {
-    "database": { "status": "healthy", "response_time_ms": 5 },
-    "redis": { "status": "healthy", "response_time_ms": 2 },
-    "kafka": { "status": "healthy", "note": "Producer connected" }
-  },
-  "memory": {
-    "rss_mb": 45,
-    "heap_used_mb": 25,
-    "heap_total_mb": 35,
-    "external_mb": 8
-  }
-}
-```
-
-### Logging
-
-- Structured logging with timestamps
-- Request/response logging
-- Error tracking with stack traces
-- Performance metrics
+- `GET /health` - Comprehensive status (database, redis, kafka, memory)
+- `GET /health/ready` - Readiness probe (Kubernetes)
+- `GET /health/live` - Liveness probe (Kubernetes)
 
 ## Production Deployment
 
-### Docker Production Build
+See [main README](../README.md#docker-deployment) for complete deployment instructions.
 
-```bash
-# Build production image
-docker build --target api-server -t product-api:latest .
-
-# Run with production environment
-docker run -d \
-  --name product-api \
-  -p 3001:3001 \
-  --env-file .env \
-  product-api:latest
-```
-
-### Kubernetes Deployment
-
-The health check endpoints support Kubernetes probes:
-
-- **Liveness**: `GET /health/live`
-- **Readiness**: `GET /health/ready`
-
-### Security Considerations
-
-- Non-root Docker user
-- Input validation and sanitization
-- Rate limiting per seller
-- Error message sanitization
-- Environment variable protection
+**Security features**: Non-root Docker user, input validation, rate limiting, error sanitization.
 
 ## License
 

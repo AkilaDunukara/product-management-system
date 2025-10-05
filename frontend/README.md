@@ -139,34 +139,11 @@ All requests include the `X-Seller-Id` header for authentication.
 
 ### Environment Variables
 
-The application uses environment variables for configuration. See `.env.example` for all available options.
-
-Key variables:
-- `VITE_API_BASE_URL` - API base URL (default: `/api`)
-- `VITE_BACKEND_URL` - Backend server URL (default: `http://localhost:3001`)
-- `VITE_DEFAULT_PAGE_SIZE` - Items per page (default: `20`)
-- `VITE_MAX_FILE_SIZE_MB` - Max CSV file size (default: `10`)
-
-Configuration files:
-- `.env` - Default configuration
-- `.env.development` - Development overrides
-- `.env.production` - Production overrides
-- `.env.example` - Template (copy this to `.env`)
+See `.env.example` for all configuration options. Key variables: API URLs, page size, file size limits.
 
 ### API Proxy
 
-The dev server proxies API requests to the backend:
-
-```typescript
-server: {
-  proxy: {
-    '/api': {
-      target: process.env.VITE_BACKEND_URL || 'http://localhost:3001',
-      changeOrigin: true
-    }
-  }
-}
-```
+Dev server proxies `/api` requests to backend (`http://localhost:3001`).
 
 ## Notes
 

@@ -234,54 +234,29 @@ curl -H "X-Seller-Id: seller-123" http://localhost:3001/api/products
 
 ## Environment Variables
 
-### Backend
+All services include `.env.example` files with complete configuration documentation. The start scripts automatically copy these to `.env` files if they don't exist.
 
-Create `.env` from `backend/.env.example`:
-
-```bash
-NODE_ENV=development
-PORT=3001
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_DB=product_management
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres123
-REDIS_HOST=localhost
-REDIS_PORT=6379
-KAFKA_BROKERS=localhost:9092
-```
-
-### Frontend
-
-Create `frontend/.env`:
+To manually configure:
 
 ```bash
-VITE_API_BASE_URL=/api
-VITE_BACKEND_URL=http://localhost:3001
-VITE_DEFAULT_PAGE_SIZE=20
-VITE_MAX_FILE_SIZE_MB=10
+# Backend
+cp backend/.env.example backend/.env
+
+# Frontend
+cp frontend/.env.example frontend/.env
+
+# Notification Service
+cp notification-service/.env.example notification-service/.env
+
+# Analytics Service
+cp analytics-service/.env.example analytics-service/.env
 ```
 
-### Notification Service
-
-```bash
-KAFKA_BROKERS=localhost:9092
-KAFKA_CLIENT_ID=notification-service
-KAFKA_GROUP_ID=notification-service-group
-DYNAMODB_TABLE_NAME=notifications
-REDIS_HOST=localhost
-REDIS_PORT=6379
-```
-
-### Analytics Service
-
-```bash
-KAFKA_BROKERS=localhost:9092
-KAFKA_CLIENT_ID=analytics-service
-KAFKA_GROUP_ID=analytics-service-group
-DYNAMODB_TABLE_NAME=analytics-metrics
-S3_BUCKET_NAME=analytics-archive
-```
+Each `.env.example` file contains:
+- **Backend**: Database, Redis, Kafka, AWS, rate limiting
+- **Frontend**: API URLs, UI configuration
+- **Notification Service**: Kafka consumer, DynamoDB, Redis pub/sub
+- **Analytics Service**: Kafka consumer, DynamoDB, S3, retry policies
 
 ## Docker Deployment
 

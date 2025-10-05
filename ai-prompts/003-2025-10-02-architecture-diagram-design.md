@@ -1,14 +1,5 @@
 # AI Prompt 003: Architecture Diagram Design and Iterations
 
-## Metadata
-- **Timestamp**: 2025-10-02 16:30:00 UTC
-- **Prompt ID**: 003
-- **Topic**: High-Level Architecture Diagram Design with Iterative Refinements
-- **Outcome**: Final architecture diagram (Mermaid format)
-- **Status**: ✅ Completed
-
----
-
 ## Context
 
 After creating the OpenAPI specification, needed to design a visual architecture for the product management system that:
@@ -26,34 +17,30 @@ After creating the OpenAPI specification, needed to design a visual architecture
 
 ---
 
-Human in the loop
-```
-we only need AuthN/Z (document approach only) so we can remove authentication 
-for now and have a auth header that identifies the seller.
-```
-```
-remove clustering and streams and just use worker threads to demonstrate 
-advance node concepts
-```
-```
-actually we need to have hot storage as dynamo db for the analytics data 
-and later move it to cold storage s3
-```
-Add support for bulk CSV upload products using file streams, and show me 
-the architecture.
-```
+## Human in the Loop
 
-**AI Response:**
-Final architecture with:
-- **Stream Pipeline**: Multer → CSV Parser → Batch Transform → DB Writer
-- Worker Threads for analytics
-- Complete hot/cold storage flow
-- X-Seller-Id authentication
+**User Iteration 1:**
+> "we only need AuthN/Z (document approach only) so we can remove authentication for now and have a auth header that identifies the seller."
 
-**Final Architecture Achieved:**
-✅ Single Node.js API server
-✅ Worker Threads (advanced concept #1)
-✅ Streams (advanced concept #2)
+**User Iteration 2:**
+> "remove clustering and streams and just use worker threads to demonstrate advance node concepts"
+
+**User Iteration 3:**
+> "actually we need to have hot storage as dynamo db for the analytics data and later move it to cold storage s3"
+
+**User Iteration 4:**
+> "Add support for bulk CSV upload products using file streams, and show me the architecture."
+
+---
+
+## Final Architecture Achieved
+
+✅ Single Node.js API server (no clustering)
+✅ Worker Threads for analytics (advanced concept #1)
+✅ Streams for CSV import (advanced concept #2)
 ✅ DynamoDB hot + S3 cold storage
 ✅ Event-driven with Kafka
 ✅ Real-time SSE notifications
+✅ X-Seller-Id header authentication
+
+**Stream Pipeline:** Multer → CSV Parser → Validation Transform → Batch Transform → DB Writer

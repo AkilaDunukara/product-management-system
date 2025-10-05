@@ -1,14 +1,5 @@
 # AI Prompt 002: OpenAPI Specification Update for Simplified Architecture
 
-## Metadata
-- **Timestamp**: 2025-10-02 15:45:00 UTC
-- **Prompt ID**: 002
-- **Topic**: OpenAPI 3.0 Update for New Simplified Architecture
-- **Outcome**: Updated `docs/openapi.yaml` (v2.0.0)
-- **Status**: ✅ Accepted
-
----
-
 ## Context
 
 After initial OpenAPI spec creation (Prompt 001), the architecture was simplified based on demo project requirements:
@@ -32,29 +23,16 @@ After initial OpenAPI spec creation (Prompt 001), the architecture was simplifie
 
 ---
 
-## AI Response
+## AI Response Summary
 
-### Overview of Changes
+**Version Update:** 1.0.0 → 2.0.0
 
-**Version Update:** 1.0.0 → 2.0.0 (breaking changes in authentication)
+**Changes Applied:**
+- ✅ Authentication: JWT Bearer → X-Seller-Id header
+- ✅ Added architecture documentation in info section
+- ✅ Enhanced CSV import with Streams pipeline details
+- ✅ Enhanced SSE endpoint documentation
+- ❌ Removed: Idempotency-Key, /products/export endpoint
+- ✅ Updated error responses for new auth model
 
-**Key Modifications:**
-
-#### 1. Authentication Simplification
-
-#### 2. Architecture Documentation in Info Section
-
-#### 3. CSV Import Enhancement (`/products/import`)
-
-#### 4. SSE Endpoint Enhancement (`/events/stream`)
-
-#### 5. Removed Components
-- ❌ `Idempotency-Key` parameter from all write operations
-- ❌ `/products/export` endpoint
-- ❌ Bearer token authentication references
-```
-#### 6. Updated Error Responses
-
-#### 7. Enhanced Endpoint Descriptions
-
-## Generated OpenAPI Spec Highlights
+**Result:** Updated `docs/openapi.yaml` aligned with simplified architecture

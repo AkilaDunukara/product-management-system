@@ -55,49 +55,19 @@ notification-service/
 
 ## Part 2: Implementation Details
 
-### Initial Issues Found
+### Issues Fixed
 
-1. **TypeScript Compilation Error**
-   - Missing `await` keyword in consumer.ts
-   - `processEvent()` returns Promise but wasn't awaited
+1. Missing `await` in consumer.ts
+2. Redis authentication (password: redis123)
+3. DynamoDB table creation with GSI + 30-day TTL
+4. Moved to root level (independent microservice)
 
-2. **Redis Authentication Error**
-   - Redis requires password authentication
-   - URL format: `redis://:password@host:port`
-   - Password: `redis123` (from pms-redis container)
+### Key Features
 
-3. **DynamoDB Table Missing**
-   - Table doesn't exist in LocalStack
-   - Created with GSI on sellerId
-   - 30-day TTL configuration
-
-4. **Location Decision**
-   - Initially created inside `backend/notification-service/`
-   - Moved to root level: `notification-service/`
-   - Reason: Independent microservice architecture pattern
-
-### Key Features Implemented
-
-1. **Kafka Consumer**
-   - Subscribes to 4 topics: product.created, product.updated, product.deleted, product.lowstock
-   - Consumer group: notification-service-group
-   - Partition-based ordering by sellerId
-
-2. **Event Transformation**
-   - Each handler transforms events to notification format
-   - Notification schema: id, sellerId, type, message, data, timestamp, read
-
-3. **Retry Policy** (Exponential Backoff)
-   - Max retries: 5
-   - Initial delay: 500ms
-   - Multiplier: 2x
-   - Max delay: 10s
-   - Per event-contracts.json specification
-
-4. **DynamoDB Storage**
-   - Table: notifications
-   - Primary key: id
-   - GSI: SellerIdIndex (on sellerId)
+- Kafka consumer (4 topics, consumer group)
+- Event transformation to notification format
+- Retry policy: 5 retries, exponential backoff (500ms → 10s)
+- DynamoDB storage with GSI on sellerId
    - TTL: 30 days automatic expiration
 
 5. **Redis Pub/Sub**
@@ -112,122 +82,18 @@ notification-service/
 
 Add unit tests with Jest to cover files in handlers, redis client, dynamodb.ts and consumer.ts. Store them following proper folder structure.
 
-### Testing Setup
+### Testing
 
-**Test Framework:**
-- Jest with TypeScript support (ts-jest)
-- Coverage reporting (text, lcov, html)
-- Fake timers for retry testing
-- Comprehensive mocking
+**Test Suites:** 7 files, 41 tests
+**Coverage:** 97.64% overall (100% for handlers, consumer, storage)
+**Tools:** Jest, ts-jest, comprehensive mocking
 
-```
+**Test Structure:**
+- handlers/ (4 files, 13 tests)
+- storage/dynamodb.test.ts (5 tests)
+- pubsub/redis.test.ts (8 tests)
+- consumer.test.ts (13 tests)
 
-### Test Structure
-
-```
-notification-service/__tests__/
-├── handlers/
-│   ├── productCreated.test.ts    (3 tests)
-│   ├── productUpdated.test.ts    (3 tests)
-│   ├── productDeleted.test.ts    (3 tests)
-│   └── lowStock.test.ts          (4 tests)
-├── storage/
-│   └── dynamodb.test.ts          (5 tests)
-├── pubsub/
-│   └── redis.test.ts             (8 tests)
-└── consumer.test.ts              (13 tests)
-
-Total: 7 test suites, 41 tests, 1,088 lines of test code
-```
-
-### Test Coverage Results
-
-```
-File                | % Stmts | % Branch | % Funcs | % Lines
---------------------|---------|----------|---------|--------
-All files           |   97.64 |      100 |   88.23 |     100
- consumer.ts        |     100 |      100 |     100 |     100
- handlers/          |     100 |      100 |     100 |     100
-  productCreated.ts |     100 |      100 |     100 |     100
-  productUpdated.ts |     100 |      100 |     100 |     100
-  productDeleted.ts |     100 |      100 |     100 |     100
-  lowStock.ts       |     100 |      100 |     100 |     100
- storage/dynamodb.ts|     100 |      100 |     100 |     100
- pubsub/redis.ts    |   85.71 |      100 |      60 |     100
-
-### Test Verification
-
-**Test Event Sent:**
-```json
-{
-  "eventId": "seller-123-12345-ProductCreated-1759566574779",
-  "eventType": "ProductCreated",
-  "timestamp": 1759566574779,
-  "data": {
-    "productId": 12345,
-    "sellerId": "seller-123",
-    "name": "Test Wireless Mouse",
-    "price": 29.99,
-    "quantity": 150,
-    "category": "Electronics"
-  }
-}
-```
-
-**Result:**
-✅ Event consumed from Kafka  
-✅ Notification saved to DynamoDB  
-✅ Published to Redis (notifications:seller-123)  
-✅ Successfully processed  
-
-### Files Summary
-
-**Total Files Created:** 26 files
-
-**Source Code:** 11 files (~700 lines)
-- 1 entry point
-- 1 consumer
-- 4 handlers
-- 1 storage module
-- 1 pub/sub module
-- 1 types file
-
-**Tests:** 7 files (~1,088 lines)
-- 4 handler test files
-- 1 storage test file
-- 1 pub/sub test file
-- 1 consumer test file
-
-**Configuration:** 8 files
-- package.json, tsconfig.json, jest.config.js
-- .env, .env.example
-- .gitignore, .dockerignore
-- Dockerfile
-
-**Documentation:** 3 files
-- README.md
-- IMPLEMENTATION.md
-- TEST_SUMMARY.md
-
-### Project Structure Update
-
-```
-product-management-system/
-├── backend/              # API Server (Express REST API)
-├── notification-service/ # Notification Microservice ✅ NEW
-├── docs/
-├── ai-prompts/
-└── PROJECT_STRUCTURE.md  # Updated with service info
-```
-
-## Key Learnings
-
-1. **Microservice Architecture**: Independent services should be at root level, not nested
-2. **Environment Management**: Use .env files with dotenv for cleaner configuration
-3. **Testing Strategy**: Mock all external dependencies for fast, reliable tests
-4. **Retry Logic**: Implement exponential backoff for resilience
-5. **TypeScript**: Strict mode catches errors early (e.g., missing await)
-6. **Coverage Goals**: 97%+ coverage achievable with comprehensive tests
-7. **Documentation**: Multiple docs serve different purposes (README, IMPLEMENTATION, TEST_SUMMARY)
+**Verified:** End-to-end flow (Kafka → DynamoDB → Redis pub/sub)
 
 

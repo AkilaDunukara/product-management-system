@@ -60,19 +60,18 @@ npm run test:coverage
 
 ## Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| KAFKA_BROKERS | Kafka broker addresses | localhost:9092 |
-| KAFKA_CLIENT_ID | Kafka client identifier | analytics-service |
-| KAFKA_GROUP_ID | Kafka consumer group | analytics-service-group |
-| DYNAMODB_TABLE_NAME | DynamoDB table name | analytics-metrics |
-| S3_BUCKET_NAME | S3 bucket for archives | analytics-archive |
-| MAX_RETRIES | Maximum retry attempts | 10 |
-| INITIAL_RETRY_DELAY_MS | Initial retry delay | 2000 |
-| BACKOFF_MULTIPLIER | Backoff multiplier | 2 |
-| MAX_RETRY_DELAY_MS | Maximum retry delay | 60000 |
-| ARCHIVE_BATCH_SIZE | Events per batch | 100 |
-| ARCHIVE_INTERVAL_HOURS | Archive interval | 24 |
+All required environment variables are documented in `.env.example`. Copy this file to `.env` and adjust values as needed:
+
+```bash
+cp .env.example .env
+```
+
+Key configuration includes:
+- Kafka connection and consumer settings
+- DynamoDB table for hot storage
+- S3 bucket for cold storage archives
+- Retry policy parameters
+- Batch processing and archival intervals
 
 ## Docker
 
