@@ -1,0 +1,51 @@
+name,description,price,quantity,category
+iPhone 15 Pro,Latest Apple smartphone with A17 Pro chip and titanium design,999.99,45,Electronics
+Samsung Galaxy S24,Flagship Android phone with AI features,899.99,38,Electronics
+MacBook Pro 16,High-performance laptop with M3 Max chip,2499.99,12,Electronics
+Dell XPS 15,Premium Windows laptop with OLED display,1799.99,8,Electronics
+iPad Air,Versatile tablet with M2 chip,599.99,55,Electronics
+Sony WH-1000XM5,Premium noise-cancelling wireless headphones,399.99,67,Electronics
+AirPods Pro,Apple wireless earbuds with active noise cancellation,249.99,120,Electronics
+LG OLED TV 55,4K OLED smart TV with stunning picture quality,1299.99,15,Electronics
+Canon EOS R6,Full-frame mirrorless camera for professionals,2499.99,6,Electronics
+Nintendo Switch OLED,Gaming console with vibrant OLED screen,349.99,42,Electronics
+The Great Gatsby,Classic American novel by F. Scott Fitzgerald,12.99,150,Books
+1984,Dystopian novel by George Orwell,14.99,89,Books
+To Kill a Mockingbird,Pulitzer Prize-winning novel,13.99,72,Books
+Harry Potter Box Set,Complete collection of Harry Potter series,99.99,25,Books
+Atomic Habits,Self-help book on building good habits,16.99,200,Books
+Sapiens,Brief history of humankind by Yuval Noah Harari,18.99,95,Books
+The Hobbit,Fantasy adventure by J.R.R. Tolkien,15.99,110,Books
+Educated,Memoir by Tara Westover,14.99,78,Books
+Becoming,Autobiography by Michelle Obama,19.99,63,Books
+The Alchemist,Philosophical novel by Paulo Coelho,13.99,145,Books
+Yoga Mat Premium,Non-slip exercise mat with carrying strap,29.99,85,Sports
+Dumbbells Set 20kg,Adjustable weight dumbbells for home gym,89.99,32,Sports
+Running Shoes Nike,Lightweight running shoes with cushioning,129.99,48,Sports
+Resistance Bands,Set of 5 resistance bands for strength training,24.99,156,Sports
+Tennis Racket Wilson,Professional-grade tennis racket,199.99,18,Sports
+Basketball Spalding,Official size basketball for indoor/outdoor,34.99,92,Sports
+Protein Powder 2kg,Whey protein isolate for muscle recovery,49.99,67,Sports
+Gym Bag Large,Durable gym bag with multiple compartments,39.99,103,Sports
+Water Bottle Steel,Insulated stainless steel water bottle,19.99,215,Sports
+Foam Roller,High-density foam roller for muscle recovery,24.99,78,Sports
+Organic Green Tea,Premium loose leaf green tea 100g,12.99,180,Food
+Extra Virgin Olive Oil,Cold-pressed olive oil from Italy 500ml,24.99,95,Food
+Almond Butter,Natural almond butter no added sugar 350g,14.99,125,Food
+Quinoa Organic,Certified organic quinoa 1kg,9.99,142,Food
+Dark Chocolate 85%,Premium dark chocolate bar 100g,4.99,320,Food
+Honey Raw,Unprocessed raw honey 500g,18.99,87,Food
+Pasta Whole Wheat,Organic whole wheat pasta 500g,3.99,245,Food
+Coffee Beans Arabica,Single-origin arabica coffee beans 250g,16.99,156,Food
+Chia Seeds Organic,Organic chia seeds 500g,11.99,98,Food
+Coconut Oil,Virgin coconut oil for cooking 500ml,13.99,112,Food
+Office Chair Ergonomic,Adjustable ergonomic office chair with lumbar support,299.99,28,Furniture
+Standing Desk,Electric height-adjustable standing desk,499.99,15,Furniture
+Bookshelf 5-Tier,Wooden bookshelf with 5 shelves,149.99,22,Furniture
+Sofa 3-Seater,Modern fabric sofa with comfortable cushions,899.99,8,Furniture
+Dining Table Set,Dining table with 6 chairs,699.99,5,Furniture
+Bed Frame Queen,Solid wood queen size bed frame,449.99,11,Furniture
+Nightstand Pair,Set of 2 modern nightstands with drawers,179.99,19,Furniture
+Coffee Table,Glass top coffee table with storage,199.99,24,Furniture
+Wardrobe 3-Door,Large wardrobe with hanging space and shelves,599.99,7,Furniture
+Desk Lamp LED,Adjustable LED desk lamp with USB charging,39.99,145,Furniture
