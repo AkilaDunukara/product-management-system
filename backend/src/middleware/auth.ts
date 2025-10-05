@@ -5,13 +5,13 @@ import { Request, Response, NextFunction } from 'express';
  * This is a simplified authentication approach for demo purposes
  */
 const authMiddleware = (req: Request, res: Response, next: NextFunction): void => {
-  const sellerId = req.headers['x-seller-id'] as string;
+  const sellerId = (req.headers['x-seller-id'] as string) || (req.query.sellerId as string);
 
-  // Check if X-Seller-Id header is present
+  // Check if X-Seller-Id header or sellerId query parameter is present
   if (!sellerId) {
     res.status(401).json({
       error: 'Unauthorized',
-      message: 'X-Seller-Id header required',
+      message: 'X-Seller-Id header or sellerId query parameter required',
       error_code: 'MISSING_SELLER_ID'
     });
     return;

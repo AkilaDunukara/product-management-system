@@ -4,7 +4,12 @@ export const useLocalStorage = <T>(key: string, initialValue: T): [T, (value: T)
   const [storedValue, setStoredValue] = useState<T>(() => {
     try {
       const item = window.localStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
+      if (!item) return initialValue;
+      try {
+        return JSON.parse(item);
+      } catch {
+        return item as T;
+      }
     } catch (error) {
       console.error(`Error reading localStorage key "${key}":`, error);
       return initialValue;
@@ -14,7 +19,8 @@ export const useLocalStorage = <T>(key: string, initialValue: T): [T, (value: T)
   const setValue = useCallback((value: T) => {
     try {
       setStoredValue(value);
-      window.localStorage.setItem(key, JSON.stringify(value));
+      const valueToStore = typeof value === 'string' ? value : JSON.stringify(value);
+      window.localStorage.setItem(key, valueToStore);
     } catch (error) {
       console.error(`Error setting localStorage key "${key}":`, error);
     }
@@ -33,7 +39,11 @@ export const useLocalStorage = <T>(key: string, initialValue: T): [T, (value: T)
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === key && e.newValue) {
         try {
-          setStoredValue(JSON.parse(e.newValue));
+          try {
+            setStoredValue(JSON.parse(e.newValue));
+          } catch {
+            setStoredValue(e.newValue as T);
+          }
         } catch (error) {
           console.error(`Error parsing storage event for key "${key}":`, error);
         }

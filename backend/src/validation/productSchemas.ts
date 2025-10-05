@@ -112,6 +112,7 @@ export const productQuerySchema = Joi.object({
     }),
   
   category: Joi.string()
+    .allow('')
     .max(100)
     .messages({
       'string.max': 'Category filter cannot exceed 100 characters'

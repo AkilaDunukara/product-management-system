@@ -70,7 +70,8 @@ export const createSSEConnection = (
   onMessage: (data: SSEEvent) => void,
   onError?: (error: Event) => void
 ): EventSource => {
-  const eventSource = new EventSource(`${API_BASE_URL}/events/stream?sellerId=${sellerId}`);
+  const url = `${API_BASE_URL}/events/stream?sellerId=${encodeURIComponent(sellerId)}`;
+  const eventSource = new EventSource(url);
 
   eventSource.onmessage = (event: MessageEvent) => {
     try {

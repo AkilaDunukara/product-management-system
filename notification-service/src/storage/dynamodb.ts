@@ -15,21 +15,25 @@ const docClient = DynamoDBDocumentClient.from(client);
 const TABLE_NAME = process.env.NOTIFICATIONS_TABLE || 'notifications';
 
 export async function saveNotification(notification: Notification): Promise<void> {
-  const command = new PutCommand({
-    TableName: TABLE_NAME,
-    Item: {
-      id: notification.id,
-      sellerId: notification.sellerId,
-      type: notification.type,
-      message: notification.message,
-      data: notification.data,
-      timestamp: notification.timestamp,
-      read: notification.read,
-      ttl: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
-    },
-  });
+  try {
+    const command = new PutCommand({
+      TableName: TABLE_NAME,
+      Item: {
+        id: notification.id,
+        sellerId: notification.sellerId,
+        type: notification.type,
+        message: notification.message,
+        data: notification.data,
+        timestamp: notification.timestamp,
+        read: notification.read,
+        ttl: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+      },
+    });
 
-  await docClient.send(command);
-  console.log(`[DynamoDB] Saved notification: ${notification.id}`);
+    await docClient.send(command);
+    console.log(`[DynamoDB] Saved notification: ${notification.id}`);
+  } catch (error) {
+    console.warn(`[DynamoDB] Failed to save notification (non-critical):`, error instanceof Error ? error.message : error);
+  }
 }
 

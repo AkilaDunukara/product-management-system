@@ -12,7 +12,16 @@ const router = express.Router();
  * GET /events/stream - Server-Sent Events endpoint for real-time notifications
  */
 router.get('/stream', async (req, res) => {
-  const sellerId = req.sellerId;
+  const sellerId = req.query.sellerId as string || req.sellerId;
+  
+  if (!sellerId) {
+    res.status(401).json({
+      error: 'Unauthorized',
+      message: 'sellerId query parameter required',
+      error_code: 'MISSING_SELLER_ID'
+    });
+    return;
+  }
   
   console.log(`🔌 SSE connection established for seller ${sellerId}`);
 
