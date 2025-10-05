@@ -155,7 +155,7 @@ Created a complete Node.js backend with 22 files implementing:
 - Optimized layer caching
 - Production-ready image size optimization
 
-**Environment Template (`config.env.template`):**
+**Environment Template (`.env.example`):**
 - Complete environment variable documentation
 - Secure defaults for development
 - Production deployment guidance
@@ -195,7 +195,7 @@ backend/
 ├── migrations/                      # Database migrations
 ├── package.json                     # Dependencies
 ├── Dockerfile                       # Multi-service builds
-├── config.env.template             # Environment template
+├── .env.example                    # Environment template
 ├── setup.sh                        # Setup automation
 └── README.md                       # Documentation
 ```

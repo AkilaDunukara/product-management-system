@@ -22,7 +22,7 @@ A Node.js REST API server with event-driven architecture for managing e-commerce
 
 Create environment file from template:
 ```bash
-cp config.env.template .env
+cp .env.example .env
 ```
 
 Edit `.env` file with your configuration values.
@@ -149,7 +149,7 @@ backend/
 ├── package.json                     # Dependencies
 ├── Dockerfile                       # Multi-stage builds
 ├── .env                            # Environment variables
-└── config.env.template             # Environment template
+└── .env.example             # Environment template
 ```
 
 ### Scripts

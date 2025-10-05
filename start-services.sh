@@ -32,10 +32,9 @@ echo "🗄️  Step 2: Setting up Backend API..."
 echo "------------------------------------------------"
 cd "$PROJECT_ROOT/backend"
 
-if [ ! -f ".env" ]; then
+if [ ! -f ".env" ] && [ -f ".env.example" ]; then
     echo "Creating .env file from template..."
-    cp config.env.template .env
-    echo "⚠️  Please review and update .env file with your configuration"
+    cp .env.example .env
 fi
 
 if [ ! -d "node_modules" ]; then
@@ -53,6 +52,11 @@ echo "📢 Step 3: Setting up Notification Service..."
 echo "------------------------------------------------"
 cd "$PROJECT_ROOT/notification-service"
 
+if [ ! -f ".env" ] && [ -f ".env.example" ]; then
+    echo "Creating .env file from template..."
+    cp .env.example .env
+fi
+
 if [ ! -d "node_modules" ]; then
     echo "Installing notification service dependencies..."
     npm install
@@ -67,6 +71,11 @@ echo ""
 echo "📊 Step 4: Setting up Analytics Service..."
 echo "------------------------------------------------"
 cd "$PROJECT_ROOT/analytics-service"
+
+if [ ! -f ".env" ] && [ -f ".env.example" ]; then
+    echo "Creating .env file from template..."
+    cp .env.example .env
+fi
 
 if [ ! -d "node_modules" ]; then
     echo "Installing analytics service dependencies..."
@@ -83,6 +92,11 @@ echo "🎨 Step 5: Setting up Frontend..."
 echo "------------------------------------------------"
 cd "$PROJECT_ROOT/frontend"
 
+if [ ! -f ".env" ] && [ -f ".env.example" ]; then
+    echo "Creating .env file from template..."
+    cp .env.example .env
+fi
+
 if [ ! -d "node_modules" ]; then
     echo "Installing frontend dependencies..."
     npm install
@@ -98,6 +112,8 @@ echo "================================================"
 echo "🚀 Starting All Services..."
 echo "================================================"
 echo ""
+
+mkdir -p "$PROJECT_ROOT/logs"
 
 echo "Starting Backend API on port 3001..."
 cd "$PROJECT_ROOT/backend"

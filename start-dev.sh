@@ -32,19 +32,31 @@ echo "🔧 Step 2: Installing Dependencies..."
 echo "------------------------------------------------"
 
 cd "$PROJECT_ROOT/backend"
-if [ ! -f ".env" ]; then
-    cp config.env.template .env
-    echo "⚠️  Created .env file from template"
+if [ ! -f ".env" ] && [ -f ".env.example" ]; then
+    cp .env.example .env
+    echo "⚠️  Created backend .env file from template"
 fi
 [ ! -d "node_modules" ] && npm install
 
 cd "$PROJECT_ROOT/notification-service"
+if [ ! -f ".env" ] && [ -f ".env.example" ]; then
+    cp .env.example .env
+    echo "⚠️  Created notification-service .env file from template"
+fi
 [ ! -d "node_modules" ] && npm install
 
 cd "$PROJECT_ROOT/analytics-service"
+if [ ! -f ".env" ] && [ -f ".env.example" ]; then
+    cp .env.example .env
+    echo "⚠️  Created analytics-service .env file from template"
+fi
 [ ! -d "node_modules" ] && npm install
 
 cd "$PROJECT_ROOT/frontend"
+if [ ! -f ".env" ] && [ -f ".env.example" ]; then
+    cp .env.example .env
+    echo "⚠️  Created frontend .env file from template"
+fi
 [ ! -d "node_modules" ] && npm install
 
 echo "✅ Dependencies installed"

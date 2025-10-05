@@ -129,7 +129,7 @@ docker-compose ps
 ```bash
 cd backend
 npm install
-cp config.env.template .env
+cp .env.example .env
 npm run build
 npm start
 ```
@@ -236,7 +236,7 @@ curl -H "X-Seller-Id: seller-123" http://localhost:3001/api/products
 
 ### Backend
 
-Create `.env` from `backend/config.env.template`:
+Create `.env` from `backend/.env.example`:
 
 ```bash
 NODE_ENV=development

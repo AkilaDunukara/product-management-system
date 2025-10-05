@@ -190,7 +190,7 @@ npm run dev
 
 ## Configuration
 
-All configuration via environment variables (see `config.env.template`):
+All configuration via environment variables (see `.env.example`):
 - Kafka connection
 - AWS credentials and endpoints
 - Retry policy parameters
