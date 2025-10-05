@@ -156,7 +156,43 @@ backend/
 
 - `npm start` - Start production server
 - `npm run dev` - Start development server with nodemon
-- `npm test` - Run tests (when implemented)
+- `npm test` - Run tests
+- `npm run test:coverage` - Run tests with coverage report
+
+## Database Schema
+
+### Products Table
+
+```sql
+CREATE TABLE products (
+    id SERIAL PRIMARY KEY,
+    seller_id VARCHAR(100) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    price DECIMAL(10, 2) NOT NULL,
+    quantity INTEGER NOT NULL DEFAULT 0,
+    category VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    deleted_at TIMESTAMP WITH TIME ZONE
+);
+```
+
+### Database Indexes
+
+Two partial indexes optimize common query patterns:
+
+1. **`idx_products_seller_id`** - Index on `seller_id` (partial: WHERE deleted_at IS NULL)
+   - **Why**: Most queries filter by seller_id to show products for a specific seller
+   - **Benefit**: Fast lookups for GET /api/products?sellerId=xxx
+   - **Partial**: Only indexes active products (not soft-deleted)
+
+2. **`idx_products_seller_category`** - Composite index on `(seller_id, category)` (partial: WHERE deleted_at IS NULL)
+   - **Why**: Common filtering pattern by seller and category together
+   - **Benefit**: Fast lookups for GET /api/products?sellerId=xxx&category=Electronics
+   - **Partial**: Reduces index size by excluding deleted products
+
+Both indexes exclude soft-deleted products (`WHERE deleted_at IS NULL`) to keep index size small and queries fast.
 
 ## Architecture
 

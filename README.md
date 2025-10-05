@@ -23,12 +23,44 @@ A complete microservices-based product management system with real-time notifica
 └─────────────┘  └────────────────┘  └──────────────────┘
 ```
 
+## Architecture Decisions
+
+### Why Kafka?
+- **Event-driven architecture**: Decouples services for independent scaling
+- **Reliable messaging**: Guarantees event delivery with persistence
+- **Multiple consumers**: Notification and Analytics services consume same events independently
+- **Scalability**: Handles high-throughput product events efficiently
+
+### Why Redis?
+- **Rate limiting**: Fast in-memory checks for API throttling (100 req/sec per seller)
+- **Pub/Sub for SSE**: Real-time notification delivery to connected frontend clients
+- **Low latency**: Sub-millisecond response times for hot data
+
+### Why DynamoDB?
+- **NoSQL flexibility**: Schema-less storage for notifications and metrics
+- **TTL support**: Auto-delete old notifications after 30 days
+- **Scalability**: Handles variable workloads without manual sharding
+- **Fast reads**: Low-latency queries for recent notifications
+
+### Why PostgreSQL?
+- **ACID compliance**: Strong consistency for product inventory
+- **Relational data**: Products have structured schema with relationships
+- **Complex queries**: Filtering, sorting, pagination with SQL
+- **Transactions**: Ensures data integrity for critical operations
+
+### Why S3?
+- **Cold storage**: Archive old analytics data cheaply
+- **Durability**: 99.999999999% data durability
+- **Scalability**: Unlimited storage for historical metrics
+
 ## Services
 
-- **Backend API**: REST API with PostgreSQL, Kafka producer, Redis rate limiting
-- **Frontend**: React + TypeScript UI with real-time SSE notifications
-- **Notification Service**: Kafka consumer → DynamoDB → Redis pub/sub
-- **Analytics Service**: Kafka consumer → Worker threads → DynamoDB + S3
+- **[Backend API](./backend/README.md)**: REST API with PostgreSQL, Kafka producer, Redis rate limiting
+- **[Frontend](./frontend/README.md)**: React + TypeScript UI with real-time SSE notifications
+- **[Notification Service](./notification-service/README.md)**: Kafka consumer → DynamoDB → Redis pub/sub
+- **[Analytics Service](./analytics-service/README.md)**: Kafka consumer → Worker threads → DynamoDB + S3
+
+> 📖 Click on each service name above to view detailed documentation, setup instructions, and API references.
 
 ## Prerequisites
 
@@ -167,32 +199,6 @@ curl -X POST http://localhost:3001/api/products/import \
 ```
 
 Or use the frontend Import page to upload `seed-products.csv`.
-
-## Testing
-
-### Backend Tests
-
-```bash
-cd backend
-npm test
-npm run test:coverage
-```
-
-### Notification Service Tests
-
-```bash
-cd notification-service
-npm test
-npm run test:coverage
-```
-
-### Analytics Service Tests
-
-```bash
-cd analytics-service
-npm test
-npm run test:coverage
-```
 
 ## API Documentation
 
@@ -416,37 +422,63 @@ All scripts are executable and can be run from the project root:
 ./view-logs.sh
 ```
 
+## Testing
+
+All services include comprehensive unit tests:
+
+- **[Backend Tests](./backend/README.md#testing)**: 40 tests, 90%+ coverage
+- **[Frontend Tests](./frontend/TEST_SUMMARY.md)**: 129 tests, 91%+ coverage
+- **[Notification Service Tests](./notification-service/TEST_SUMMARY.md)**: 23 tests, 95%+ coverage
+- **[Analytics Service Tests](./analytics-service/TEST_SUMMARY.md)**: 18 tests, 90%+ coverage
+
+Run tests for all services:
+```bash
+cd backend && npm test
+cd frontend && npm test
+cd notification-service && npm test
+cd analytics-service && npm test
+```
+
 ## Project Structure
 
 ```
 product-management-system/
 ├── backend/                 # REST API server
 │   ├── src/
+│   ├── __tests__/
 │   ├── migrations/
 │   ├── docker-compose.yml
-│   └── Dockerfile
+│   └── README.md
 ├── frontend/                # React UI
 │   ├── src/
-│   └── dist/
+│   ├── __tests__/
+│   └── README.md
 ├── notification-service/    # Event notifications
 │   ├── src/
-│   └── dist/
+│   ├── __tests__/
+│   └── README.md
 ├── analytics-service/       # Data aggregation
 │   ├── src/
-│   └── dist/
+│   ├── __tests__/
+│   └── README.md
 ├── docs/                    # Documentation
 │   ├── openapi.yaml
 │   ├── api-docs.html
 │   └── architecture-diagram.png
 ├── ai-prompts/              # Development prompts
-├── logs/                    # Service logs
-├── seed-products.csv        # Sample data
+├── logs/                    # Service logs (runtime, not in git)
 ├── start-services.sh        # Production startup
 ├── start-dev.sh             # Development startup
 ├── stop-services.sh         # Shutdown script
-├── view-logs.sh             # Log viewer
-└── README.md
+└── view-logs.sh             # Log viewer
 ```
+
+## Documentation
+
+- **[API Documentation](./docs/api-docs.html)**: OpenAPI/Swagger documentation
+- **[Event Contracts](./docs/event-contracts.md)**: Kafka event schemas
+- **[Architecture Diagram](./docs/architecture-diagram.png)**: System architecture
+- **[AI Prompts](./ai-prompts/)**: Development history and prompts
 
 ## Troubleshooting
 

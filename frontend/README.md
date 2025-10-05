@@ -139,7 +139,7 @@ All requests include the `X-Seller-Id` header for authentication.
 
 ### Environment Variables
 
-The application uses environment variables for configuration. See `ENV_CONFIGURATION.md` for full details.
+The application uses environment variables for configuration. See `.env.example` for all available options.
 
 Key variables:
 - `VITE_API_BASE_URL` - API base URL (default: `/api`)
